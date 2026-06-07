@@ -3,8 +3,7 @@ services:
     name: artist-2-0
     runtime: node
     plan: free
-    # Render מריץ npm install אוטומטית — רק build כאן (לא pm install!)
-    buildCommand: npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
