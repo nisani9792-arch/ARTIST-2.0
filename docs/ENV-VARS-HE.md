@@ -14,6 +14,7 @@
 |---|---|
 | **תיאור** | מחרוזת חיבור ל-PostgreSQL ב-Neon |
 | **דוגמה** | `postgresql://USER:PASSWORD@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require` |
+| **חשוב** | ב-Render חובה להגדיר — בלי זה רישום מפעיל נכשל. **ללא** `channel_binding=require` |
 | **איפה להשיג** | [Neon Console](https://console.neon.tech) → Project → Connection string → **Pooled connection** |
 | **שימוש** | כל שאילתות האומנים, עדכוני סטטוס, אישור אודו |
 

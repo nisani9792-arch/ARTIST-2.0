@@ -29,7 +29,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || "בקשה נכשלה");
+    throw new Error(
+      typeof data.error === "string" && data.error ? data.error : "בקשה נכשלה",
+    );
   }
   return data as T;
 }
@@ -44,15 +46,19 @@ export const fetchAccessStatus = async (): Promise<AccessStatus> => {
 };
 
 export const registerOperator = async (operatorName: string): Promise<string> => {
-  const data = await request<{ operatorName: string }>("/api/access/register", {
+  const data = await request<{ operatorName?: string }>("/api/access/register", {
     method: "POST",
-    body: JSON.stringify({ operatorName }),
+    body: JSON.stringify({ operatorName: operatorName.trim() }),
   });
-  setStoredOperatorName(data.operatorName);
-  return data.operatorName;
+  const name = data.operatorName?.trim();
+  if (!name) {
+    throw new Error("רישום נכשל — לא התקבל שם מפעיל מהשרת");
+  }
+  setStoredOperatorName(name);
+  return name;
 };
 
-/** Sync saved name with server for this IP; fall back to offline workspace. */
+/** Auto-sync saved name with server; offline fallback on refresh only. */
 export const enterWithSavedOperator = async (
   cachedName: string,
 ): Promise<

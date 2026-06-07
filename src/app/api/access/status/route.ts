@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getClientIp } from "@/lib/access/client-ip";
 import { getAccessByIp, toStatus } from "@/lib/access/store";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     const ip = await getClientIp();

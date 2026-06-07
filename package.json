@@ -26,10 +26,11 @@
     "@tanstack/react-virtual": "^3.13.2",
     "drizzle-orm": "^0.40.0",
     "next": "^15.2.0",
+    "pm-shim": "file:./packages/pm-shim",
+    "postgres": "^3.4.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zod": "^3.24.2",
-    "pm-shim": "file:./packages/pm-shim"
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

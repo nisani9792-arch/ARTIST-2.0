@@ -5,6 +5,7 @@ import {
   enterWithSavedOperator,
   fetchAccessStatus,
   getCachedOperatorName,
+  registerOperator,
 } from "@/api/access";
 import {
   getStoredOperatorName,
@@ -76,14 +77,18 @@ export function useAccessGate() {
   const register = useCallback(async (name: string) => {
     setError("");
     const trimmed = name.trim();
-    const registered = await enterWithSavedOperator(trimmed);
-    if (registered.state !== "ready") {
-      throw new Error("הרישום נכשל");
+    try {
+      const registeredName = await registerOperator(trimmed);
+      markTrustedDevice();
+      setStoredOperatorName(registeredName);
+      setOperatorName(registeredName);
+      setPhase("ready");
+      return registeredName;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "הרישום נכשל";
+      setError(message);
+      throw new Error(message);
     }
-    setStoredOperatorName(registered.operatorName);
-    setOperatorName(registered.operatorName);
-    setPhase("ready");
-    return registered.operatorName;
   }, []);
 
   useEffect(() => {

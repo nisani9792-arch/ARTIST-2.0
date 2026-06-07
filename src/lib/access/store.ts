@@ -1,6 +1,4 @@
-import { eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { ipAccess } from "@/lib/db/schema";
+import { getSql } from "@/lib/db";
 
 export type AccessRecord = {
   gateUnlocked: boolean;
@@ -13,12 +11,14 @@ export type AccessStatus = {
   auth: "ip" | null;
 };
 
-const normalize = (row?: {
-  displayName: string | null;
-  gateUnlockedAt: string | null;
-}): AccessRecord => ({
-  gateUnlocked: Boolean(row?.gateUnlockedAt),
-  displayName: row?.displayName ?? null,
+type IpAccessRow = {
+  display_name: string | null;
+  gate_unlocked_at: string | null;
+};
+
+const normalize = (row?: IpAccessRow | null): AccessRecord => ({
+  gateUnlocked: Boolean(row?.gate_unlocked_at),
+  displayName: row?.display_name ?? null,
 });
 
 export function toStatus(access: AccessRecord): AccessStatus {
@@ -29,56 +29,30 @@ export function toStatus(access: AccessRecord): AccessStatus {
 }
 
 export async function getAccessByIp(ip: string): Promise<AccessRecord> {
-  const [touched] = await db
-    .update(ipAccess)
-    .set({ lastSeenAt: new Date().toISOString() })
-    .where(eq(ipAccess.ip, ip))
-    .returning({
-      displayName: ipAccess.displayName,
-      gateUnlockedAt: ipAccess.gateUnlockedAt,
-    });
+  const sql = getSql();
+  const rows = await sql`
+    UPDATE ip_access
+    SET last_seen_at = NOW()
+    WHERE ip = ${ip}
+    RETURNING display_name, gate_unlocked_at
+  `;
 
-  if (touched) return normalize(touched);
+  if (rows[0]) return normalize(rows[0] as IpAccessRow);
   return { gateUnlocked: false, displayName: null };
 }
 
 export async function unlockGateForIp(ip: string): Promise<AccessRecord> {
-  const existing = await db
-    .select()
-    .from(ipAccess)
-    .where(eq(ipAccess.ip, ip))
-    .limit(1);
+  const sql = getSql();
+  const rows = await sql`
+    INSERT INTO ip_access (ip, gate_unlocked_at, last_seen_at)
+    VALUES (${ip}, NOW(), NOW())
+    ON CONFLICT (ip) DO UPDATE SET
+      gate_unlocked_at = COALESCE(ip_access.gate_unlocked_at, EXCLUDED.gate_unlocked_at),
+      last_seen_at = NOW()
+    RETURNING display_name, gate_unlocked_at
+  `;
 
-  const now = new Date().toISOString();
-
-  if (existing[0]) {
-    const [row] = await db
-      .update(ipAccess)
-      .set({
-        gateUnlockedAt: existing[0].gateUnlockedAt ?? now,
-        lastSeenAt: now,
-      })
-      .where(eq(ipAccess.ip, ip))
-      .returning({
-        displayName: ipAccess.displayName,
-        gateUnlockedAt: ipAccess.gateUnlockedAt,
-      });
-    return normalize(row);
-  }
-
-  const [row] = await db
-    .insert(ipAccess)
-    .values({
-      ip,
-      gateUnlockedAt: now,
-      lastSeenAt: now,
-    })
-    .returning({
-      displayName: ipAccess.displayName,
-      gateUnlockedAt: ipAccess.gateUnlockedAt,
-    });
-
-  return normalize(row);
+  return normalize(rows[0] as IpAccessRow | undefined);
 }
 
 export async function registerOperatorForIp(
@@ -90,32 +64,20 @@ export async function registerOperatorForIp(
     throw new Error("Invalid display name");
   }
 
-  const now = new Date().toISOString();
+  const sql = getSql();
+  const rows = await sql`
+    INSERT INTO ip_access (ip, display_name, gate_unlocked_at, registered_at, last_seen_at)
+    VALUES (${ip}, ${name}, NOW(), NOW(), NOW())
+    ON CONFLICT (ip) DO UPDATE SET
+      display_name = EXCLUDED.display_name,
+      gate_unlocked_at = COALESCE(ip_access.gate_unlocked_at, EXCLUDED.gate_unlocked_at),
+      registered_at = COALESCE(ip_access.registered_at, EXCLUDED.registered_at),
+      last_seen_at = NOW()
+    RETURNING display_name, gate_unlocked_at
+  `;
 
-  const [row] = await db
-    .insert(ipAccess)
-    .values({
-      ip,
-      displayName: name,
-      gateUnlockedAt: now,
-      registeredAt: now,
-      lastSeenAt: now,
-    })
-    .onConflictDoUpdate({
-      target: ipAccess.ip,
-      set: {
-        displayName: name,
-        gateUnlockedAt: sql`COALESCE(${ipAccess.gateUnlockedAt}, ${now})`,
-        registeredAt: sql`COALESCE(${ipAccess.registeredAt}, now())`,
-        lastSeenAt: now,
-      },
-    })
-    .returning({
-      displayName: ipAccess.displayName,
-      gateUnlockedAt: ipAccess.gateUnlockedAt,
-    });
-
-  if (!row) {
+  const row = rows[0] as IpAccessRow | undefined;
+  if (!row?.display_name) {
     throw new Error("Registration failed");
   }
 
