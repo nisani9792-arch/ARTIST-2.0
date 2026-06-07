@@ -1,9 +1,14 @@
-RENDER BUILD COMMAND (הגדר ב-Dashboard → Settings → Build Command):
+!!! RENDER — שנה ב-Dashboard !!!
 
-npm run build
+האפשרות המומלצת:
+  Environment = Docker
+  Dockerfile Path = Dockerfile
 
-אל תשתמש ב: pm install && npm run build
+אם נשאר Node, Build Command חייב להיות אחד מאלה:
+  bash render-build.sh
+  npm ci && npm run build
 
-אם נשאר pm install — הפרויקט כולל shim אוטומטי (preinstall), אבל עדיף לתקן ל-npm run build.
+אסור:
+  pm install && npm run build
 
-Docker (מומלץ): Environment = Docker, Dockerfile Path = Dockerfile
+פרטים: docs/DEPLOY-NOW-HE.md

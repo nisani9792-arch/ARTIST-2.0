@@ -1,6 +1,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY packages ./packages
 RUN npm ci
 
 FROM node:22-alpine AS builder
@@ -8,6 +9,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Placeholders for Next.js build (overridden at runtime on Render)
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
+ENV GEMINI_API_KEY="build-placeholder"
+ENV GATE_SECRET="JUSIC"
+ENV TRUST_PROXY="1"
 RUN npm run build
 
 FROM node:22-alpine AS runner

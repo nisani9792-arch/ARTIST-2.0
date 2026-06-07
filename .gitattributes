@@ -1,0 +1,4 @@
+pm text eol=lf
+render-build.sh text eol=lf
+*.sh text eol=lf
+packages/pm-shim/bin/pm.js text eol=lf

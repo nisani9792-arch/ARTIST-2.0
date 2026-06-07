@@ -1,0 +1,8 @@
+{
+  "name": "pm-shim",
+  "version": "1.0.0",
+  "private": true,
+  "bin": {
+    "pm": "bin/pm.js"
+  }
+}

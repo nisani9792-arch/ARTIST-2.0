@@ -1,12 +1,15 @@
-# Blueprint — Render מתעלם מ-buildCommand כש-runtime הוא docker
+# Blueprint — חובה ליצור שירות מ-Blueprint או לסנכרן קיים
+# Docker מתעלם לחלוטין מ-Build Command השגוי (pm install)
 services:
   - type: web
     name: artist-2-0
     runtime: docker
     plan: free
+    region: frankfurt
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
+    autoDeploy: true
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -22,3 +25,5 @@ services:
         value: "true"
       - key: TRUST_PROXY
         value: "1"
+      - key: NODE_ENV
+        value: production
