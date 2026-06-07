@@ -1,14 +1,13 @@
+# Blueprint — Render מתעלם מ-buildCommand כש-runtime הוא docker
 services:
   - type: web
     name: artist-2-0
-    runtime: node
+    runtime: docker
     plan: free
-    buildCommand: npm ci && npm run build
-    startCommand: npm run start
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/health
     envVars:
-      - key: NODE_VERSION
-        value: "22"
       - key: DATABASE_URL
         sync: false
       - key: GEMINI_API_KEY
