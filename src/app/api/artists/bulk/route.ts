@@ -1,0 +1,26 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { bulkUpdateArtists } from "@/lib/artists";
+
+const bulkSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+  handlerName: z.string().trim().min(1).optional(),
+  isSigned: z.boolean().optional(),
+});
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = bulkSchema.parse(await request.json());
+    const artists = await bulkUpdateArtists(body.ids, {
+      handlerName: body.handlerName,
+      isSigned: body.isSigned,
+    });
+    return NextResponse.json({ artists, count: artists.length });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0]?.message }, { status: 400 });
+    }
+    console.error(error);
+    return NextResponse.json({ error: "שגיאה בעדכון מרובה" }, { status: 500 });
+  }
+}
