@@ -6,6 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "postinstall": "node scripts/create-pm-shim.cjs",
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",

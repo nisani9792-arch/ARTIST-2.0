@@ -1,0 +1,9 @@
+RENDER BUILD COMMAND (הגדר ב-Dashboard → Settings → Build Command):
+
+npm run build
+
+אל תשתמש ב: pm install && npm run build
+
+אם נשאר pm install — הפרויקט כולל shim אוטומטי (preinstall), אבל עדיף לתקן ל-npm run build.
+
+Docker (מומלץ): Environment = Docker, Dockerfile Path = Dockerfile
