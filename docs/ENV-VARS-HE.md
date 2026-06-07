@@ -72,7 +72,7 @@ GEMINI_MODEL=gemini-2.0-flash
 ## Render — שלבי פריסה
 
 1. צור **Web Service** חדש מ-GitHub repo `ARTIST-2.0`
-2. **Build Command:** `npm ci && npm run db:push && npm run build`
+2. **Build Command:** `npm run build` (לא `pm install` — Render מתקין חבילות אוטומטית)
 3. **Start Command:** `npm run start`
 4. **Health Check Path:** `/api/health`
 5. הוסף את משתני הסביבה מהטבלה למעלה
