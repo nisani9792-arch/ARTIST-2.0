@@ -4,9 +4,12 @@ import {
   isGeminiConfigured,
 } from "@/lib/gemini";
 import { findStuckArtists, listArtists } from "@/lib/artists";
+import { requireAccess } from "@/lib/access/require-access";
 
 export async function GET() {
   try {
+    const access = await requireAccess();
+    if (!access.ok) return access.response;
     const all = await listArtists();
     const fallbackStuck = await findStuckArtists(14);
     const fallbackIds = new Set(fallbackStuck.map((a) => a.id));

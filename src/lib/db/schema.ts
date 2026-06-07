@@ -32,3 +32,22 @@ export const artists = pgTable(
 
 export type ArtistRow = typeof artists.$inferSelect;
 export type NewArtistRow = typeof artists.$inferInsert;
+
+export const ipAccess = pgTable("ip_access", {
+  ip: text("ip").primaryKey(),
+  displayName: text("display_name"),
+  gateUnlockedAt: timestamp("gate_unlocked_at", {
+    withTimezone: true,
+    mode: "string",
+  }),
+  registeredAt: timestamp("registered_at", {
+    withTimezone: true,
+    mode: "string",
+  }),
+  lastSeenAt: timestamp("last_seen_at", {
+    withTimezone: true,
+    mode: "string",
+  })
+    .notNull()
+    .defaultNow(),
+});

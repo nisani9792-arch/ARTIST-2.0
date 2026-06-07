@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { bulkUpdateArtists } from "@/lib/artists";
+import { requireAccess } from "@/lib/access/require-access";
 
 const bulkSchema = z.object({
   ids: z.array(z.string().min(1)).min(1),
@@ -10,6 +11,8 @@ const bulkSchema = z.object({
 
 export async function PATCH(request: NextRequest) {
   try {
+    const access = await requireAccess();
+    if (!access.ok) return access.response;
     const body = bulkSchema.parse(await request.json());
     const artists = await bulkUpdateArtists(body.ids, {
       handlerName: body.handlerName,

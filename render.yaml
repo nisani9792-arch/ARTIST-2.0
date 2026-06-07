@@ -14,3 +14,11 @@ services:
         sync: false
       - key: GEMINI_MODEL
         value: gemini-2.0-flash
+      - key: GATE_SECRET
+        value: JUSIC
+      - key: GATE_ALLOW_SHORTCUT
+        value: "true"
+      - key: GATE_ALLOW_BIOMETRIC
+        value: "true"
+      - key: TRUST_PROXY
+        value: "1"

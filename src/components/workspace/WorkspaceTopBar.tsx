@@ -1,6 +1,7 @@
 "use client";
 
 type WorkspaceTopBarProps = {
+  operatorName?: string | null;
   search: string;
   onSearchChange: (value: string) => void;
   quickName: string;
@@ -15,6 +16,7 @@ type WorkspaceTopBarProps = {
 };
 
 export function WorkspaceTopBar({
+  operatorName,
   search,
   onSearchChange,
   quickName,
@@ -39,7 +41,9 @@ export function WorkspaceTopBar({
         />
         <div className="workspace-topbar__titles">
           <span className="workspace-topbar__logo">ARTIST 2.0</span>
-          <span className="workspace-topbar__subtitle">שולחן עבודה</span>
+          <span className="workspace-topbar__subtitle">
+            {operatorName ? `מפעיל: ${operatorName}` : "שולחן עבודה"}
+          </span>
         </div>
       </div>
 

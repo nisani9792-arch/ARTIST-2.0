@@ -21,7 +21,12 @@ import { InstallPrompt } from "@/components/m3/InstallPrompt";
 import { ServiceWorkerRegister } from "@/components/m3/ServiceWorkerRegister";
 import type { Artist } from "@/lib/types";
 
-export function ArtistWorkspace() {
+type ArtistWorkspaceProps = {
+  operatorName?: string | null;
+  offline?: boolean;
+};
+
+export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps) {
   const [search, setSearch] = useState("");
   const [quickName, setQuickName] = useState("");
   const [aiCommand, setAiCommand] = useState("");
@@ -145,7 +150,14 @@ export function ArtistWorkspace() {
     <div className="workspace">
       <ServiceWorkerRegister />
       <InstallPrompt />
+      {offline && (
+        <div className="odoo-alert" role="status">
+          מצב לא מקוון — עבודה עם נתונים שמורים במכשיר
+        </div>
+      )}
+
       <WorkspaceTopBar
+        operatorName={operatorName}
         search={search}
         onSearchChange={setSearch}
         quickName={quickName}

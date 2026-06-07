@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { updateArtist } from "@/lib/artists";
+import { requireAccess } from "@/lib/access/require-access";
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).optional(),
@@ -14,6 +15,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const access = await requireAccess();
+    if (!access.ok) return access.response;
     const { id } = await params;
     const body = patchSchema.parse(await request.json());
     const artist = await updateArtist(id, body);

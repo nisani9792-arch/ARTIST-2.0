@@ -7,6 +7,7 @@ import {
   reassignHandlerByFilter,
 } from "@/lib/artists";
 import { isGeminiConfigured, parseHebrewCommand } from "@/lib/gemini";
+import { requireAccess } from "@/lib/access/require-access";
 
 const bodySchema = z.object({
   command: z.string().trim().min(2),
@@ -14,6 +15,8 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const access = await requireAccess();
+    if (!access.ok) return access.response;
     if (!isGeminiConfigured()) {
       return NextResponse.json({ error: "Gemini לא מוגדר" }, { status: 503 });
     }

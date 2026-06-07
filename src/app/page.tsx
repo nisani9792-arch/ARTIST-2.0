@@ -1,5 +1,5 @@
-import { ArtistWorkspace } from "@/components/workspace/ArtistWorkspace";
+import { AccessGate } from "@/components/access/AccessGate";
 
 export default function HomePage() {
-  return <ArtistWorkspace />;
+  return <AccessGate />;
 }

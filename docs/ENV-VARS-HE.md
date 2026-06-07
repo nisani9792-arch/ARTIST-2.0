@@ -103,4 +103,8 @@ npm run dev
 | `DATABASE_URL` | כן | Neon PostgreSQL |
 | `GEMINI_API_KEY` | מומלץ | AI — תקועים ופקודות |
 | `GEMINI_MODEL` | לא | בחירת דגם Gemini |
+| `GATE_SECRET` | לא | קוד כניסה (ברירת מחדל: `JUSIC`) |
+| `GATE_ALLOW_SHORTCUT` | לא | אפשר Space×3 (`true`) |
+| `GATE_ALLOW_BIOMETRIC` | לא | אפשר WebAuthn (`true`) |
+| `TRUST_PROXY` | מומלץ ב-Render | `1` — לזיהוי IP נכון |
 | `NODE_VERSION` | לא | גרסת Node בפריסה |
