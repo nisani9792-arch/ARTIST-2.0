@@ -1,26 +1,32 @@
-export type AccessState = {
-  gateUnlocked: boolean;
-  displayName: string | null;
-};
+import {
+  getStoredOperatorName,
+  markTrustedDevice,
+  setStoredOperatorName,
+} from "@/lib/operator";
 
-export type AccessStatusResponse = {
-  state: "ready" | "locked";
-  operatorName: string | null;
-  auth: "ip" | null;
-  access: AccessState;
-};
+export type AccessStatus =
+  | { state: "locked"; operatorName: string | null }
+  | { state: "ready"; operatorName: string; auth?: "ip" | "session" | null };
 
-export type UnlockMethod = "password" | "shortcut" | "biometric";
+const ACCESS_FETCH_TIMEOUT_MS = 8000;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ACCESS_FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...init,
+      credentials: "same-origin",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data.error || "בקשה נכשלה");
@@ -28,20 +34,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export const fetchAccessStatus = () =>
-  request<AccessStatusResponse>("/api/access/status");
+export const fetchAccessStatus = async (): Promise<AccessStatus> => {
+  const data = await request<AccessStatus>("/api/access/status");
+  if (data.state === "ready" && data.operatorName) {
+    setStoredOperatorName(data.operatorName);
+    return data;
+  }
+  return { state: "locked", operatorName: null };
+};
 
-export const unlockGate = (options?: { method?: UnlockMethod; secret?: string }) =>
-  request<{ access: AccessState }>("/api/access/unlock", {
+export const registerOperator = async (operatorName: string): Promise<string> => {
+  const data = await request<{ operatorName: string }>("/api/access/register", {
     method: "POST",
-    body: JSON.stringify({
-      method: options?.method ?? "password",
-      secret: options?.secret,
-    }),
-  }).then((r) => r.access);
+    body: JSON.stringify({ operatorName }),
+  });
+  setStoredOperatorName(data.operatorName);
+  return data.operatorName;
+};
 
-export const registerOperator = (displayName: string) =>
-  request<{ access: AccessState }>("/api/access/register", {
-    method: "POST",
-    body: JSON.stringify({ displayName }),
-  }).then((r) => r.access);
+/** Sync saved name with server for this IP; fall back to offline workspace. */
+export const enterWithSavedOperator = async (
+  cachedName: string,
+): Promise<
+  | { state: "ready"; operatorName: string }
+  | { state: "offline"; operatorName: string }
+> => {
+  try {
+    const name = await registerOperator(cachedName);
+    markTrustedDevice();
+    return { state: "ready", operatorName: name };
+  } catch {
+    markTrustedDevice();
+    return { state: "offline", operatorName: cachedName };
+  }
+};
+
+export const getCachedOperatorName = () => getStoredOperatorName();

@@ -6,11 +6,7 @@ export async function GET() {
   try {
     const ip = await getClientIp();
     const access = await getAccessByIp(ip);
-    const status = toStatus(access);
-    return NextResponse.json({
-      ...status,
-      access,
-    });
+    return NextResponse.json(toStatus(access));
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "שגיאת גישה" }, { status: 500 });

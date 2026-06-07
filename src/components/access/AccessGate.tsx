@@ -6,14 +6,19 @@ import { LockScreen } from "./LockScreen";
 import { OperatorRegistration } from "./OperatorRegistration";
 
 export function AccessGate() {
-  const { phase, operatorName, error, unlock, register } = useAccessGate();
+  const { phase, operatorName, error, afterUnlock, register } = useAccessGate();
 
   if (phase === "loading") {
     return <div className="access-loading">טוען...</div>;
   }
 
   if (phase === "locked") {
-    return <LockScreen onUnlock={unlock} />;
+    return (
+      <LockScreen
+        onUnlock={() => void afterUnlock()}
+        knownOperatorName={operatorName}
+      />
+    );
   }
 
   if (phase === "register") {

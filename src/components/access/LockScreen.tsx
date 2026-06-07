@@ -1,43 +1,35 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { tryJusicCode } from "@/lib/access/constants";
-import type { UnlockMethod } from "@/api/access";
 import { useBiometricUnlock } from "@/hooks/useBiometricUnlock";
 import "./access.css";
 
 type LockScreenProps = {
-  onUnlock: (options?: { method?: UnlockMethod; secret?: string }) => Promise<void>;
+  onUnlock: () => void;
+  knownOperatorName?: string | null;
 };
 
-export function LockScreen({ onUnlock }: LockScreenProps) {
+export function LockScreen({ onUnlock, knownOperatorName }: LockScreenProps) {
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const unlockStarted = useRef(false);
-
-  const tryUnlock = async (options: { method: UnlockMethod; secret?: string }) => {
-    if (unlockStarted.current) return;
-    unlockStarted.current = true;
-    setBusy(true);
-    setError("");
-    try {
-      await onUnlock(options);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "פתיחה נכשלה");
-      unlockStarted.current = false;
-    } finally {
-      setBusy(false);
-    }
-  };
+  const [wrongCode, setWrongCode] = useState(false);
 
   const { available: biometricAvailable, busy: biometricBusy, unlock: unlockWithBiometric } =
-    useBiometricUnlock(() => tryUnlock({ method: "biometric" }));
+    useBiometricUnlock(onUnlock);
 
-  const handleChange = (value: string) => {
-    setPassword(value);
+  const tryCode = (value: string) => {
     if (tryJusicCode(value)) {
-      void tryUnlock({ method: "password", secret: value });
+      setWrongCode(false);
+      onUnlock();
+      return true;
+    }
+    return false;
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!tryCode(password) && password.trim().length > 0) {
+      setWrongCode(true);
     }
   };
 
@@ -52,18 +44,14 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
           🔒
         </div>
 
-        <p className="lock-prompt">אנא הכנס סיסמה</p>
-        <p className="lock-hint">קוד גישה: JUSIC · או Space × 3</p>
+        <p className="lock-prompt">אנא הכנס סיסמא</p>
+        {knownOperatorName && (
+          <p className="lock-known-operator">
+            שלום {knownOperatorName} — הזן סיסמה או טביעת אצבע לכניסה
+          </p>
+        )}
 
-        <form
-          className="lock-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (tryJusicCode(password)) {
-              void tryUnlock({ method: "password", secret: password });
-            }
-          }}
-        >
+        <form className="lock-form" onSubmit={handleSubmit}>
           <input
             className="lock-input"
             type="password"
@@ -71,33 +59,39 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
             autoComplete="off"
             maxLength={20}
             value={password}
-            onChange={(e) => handleChange(e.target.value)}
-            placeholder="••••••••"
-            aria-label="סיסמה"
-            disabled={busy}
+            onChange={(event) => {
+              const next = event.target.value;
+              setPassword(next);
+              setWrongCode(false);
+              tryCode(next);
+            }}
+            placeholder="••••••••••••••••••••"
+            aria-label="סיסמא"
+            aria-invalid={wrongCode}
             autoFocus
           />
+          {wrongCode && (
+            <p className="lock-error" role="alert">
+              קוד שגוי
+            </p>
+          )}
         </form>
-
-        {error && <p className="lock-error">{error}</p>}
 
         {biometricAvailable && (
           <button
             type="button"
             className="lock-biometric"
             onClick={() => void unlockWithBiometric()}
-            disabled={biometricBusy || busy}
+            disabled={biometricBusy}
           >
             <span aria-hidden>👆</span>
             <span>
-              {biometricBusy || busy
+              {biometricBusy
                 ? "מאמת..."
                 : "כניסה ביומטרית (טביעת אצבע / Windows Hello)"}
             </span>
           </button>
         )}
-
-        <p className="lock-space-hint">רמז: לחץ רווח 3 פעמים במהירות לפתיחה</p>
       </div>
     </div>
   );

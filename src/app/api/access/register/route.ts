@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getClientIp } from "@/lib/access/client-ip";
-import { requireGateUnlocked } from "@/lib/access/require-access";
 import { registerOperatorForIp } from "@/lib/access/store";
 
 const bodySchema = z
@@ -15,14 +14,15 @@ const bodySchema = z
 
 export async function POST(request: NextRequest) {
   try {
-    const gate = await requireGateUnlocked();
-    if (!gate.ok) return gate.response;
-
     const body = bodySchema.parse(await request.json());
     const name = body.displayName || body.operatorName || "";
     const ip = await getClientIp();
     const access = await registerOperatorForIp(ip, name);
-    return NextResponse.json({ access });
+    return NextResponse.json({
+      state: "ready",
+      operatorName: access.displayName,
+      auth: "ip",
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0]?.message }, { status: 400 });

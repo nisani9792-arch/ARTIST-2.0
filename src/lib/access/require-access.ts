@@ -8,13 +8,6 @@ export async function requireAccess(): Promise<
   const ip = await getClientIp();
   const access = await getAccessByIp(ip);
 
-  if (!access.gateUnlocked) {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "Gate is locked" }, { status: 403 }),
-    };
-  }
-
   if (!access.displayName) {
     return {
       ok: false,

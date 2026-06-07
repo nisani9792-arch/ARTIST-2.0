@@ -48,9 +48,9 @@ export function OperatorRegistration({
           👤
         </div>
 
-        <p className="lock-prompt">רישום לפעילות במערכת</p>
-        <p className="lock-hint">
-          הזינו שם גורם מטפל — השם נשמר במכשיר זה וכל שינוי יירשם על שמכם.
+        <p className="lock-prompt">הזן שם משתמש — גורם מטפל</p>
+        <p className="lock-known-operator">
+          נשמר לפי כתובת הרשת שלך. כל שינוי במערכת יירשם על שמך.
         </p>
 
         <form className="lock-form" onSubmit={(e) => void handleSubmit(e)}>

@@ -22,10 +22,10 @@ const normalize = (row?: {
 });
 
 export function toStatus(access: AccessRecord): AccessStatus {
-  if (access.gateUnlocked && access.displayName) {
+  if (access.displayName) {
     return { state: "ready", operatorName: access.displayName, auth: "ip" };
   }
-  return { state: "locked", operatorName: access.displayName, auth: null };
+  return { state: "locked", operatorName: null, auth: null };
 }
 
 export async function getAccessByIp(ip: string): Promise<AccessRecord> {
@@ -90,21 +90,33 @@ export async function registerOperatorForIp(
     throw new Error("Invalid display name");
   }
 
+  const now = new Date().toISOString();
+
   const [row] = await db
-    .update(ipAccess)
-    .set({
+    .insert(ipAccess)
+    .values({
+      ip,
       displayName: name,
-      registeredAt: sql`COALESCE(${ipAccess.registeredAt}, now())`,
-      lastSeenAt: new Date().toISOString(),
+      gateUnlockedAt: now,
+      registeredAt: now,
+      lastSeenAt: now,
     })
-    .where(eq(ipAccess.ip, ip))
+    .onConflictDoUpdate({
+      target: ipAccess.ip,
+      set: {
+        displayName: name,
+        gateUnlockedAt: sql`COALESCE(${ipAccess.gateUnlockedAt}, ${now})`,
+        registeredAt: sql`COALESCE(${ipAccess.registeredAt}, now())`,
+        lastSeenAt: now,
+      },
+    })
     .returning({
       displayName: ipAccess.displayName,
       gateUnlockedAt: ipAccess.gateUnlockedAt,
     });
 
-  if (!row?.gateUnlockedAt) {
-    throw new Error("Gate is locked");
+  if (!row) {
+    throw new Error("Registration failed");
   }
 
   return normalize(row);
