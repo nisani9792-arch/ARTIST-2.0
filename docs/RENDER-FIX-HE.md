@@ -1,5 +1,7 @@
 # תיקון פריסה ב-Render — שגיאת `pm install`
 
+> עדכון אחרון: commit `9aa9db1` — כולל shim ל-`pm install` + Docker + מסך כניסה JUSIC.
+
 ## הבעיה
 
 ב-Render מוגדר Build Command שגוי:
