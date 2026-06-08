@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import "./access.css";
 
 type OperatorRegistrationProps = {
   onRegister: (displayName: string) => Promise<string | null>;
@@ -38,24 +37,38 @@ export function OperatorRegistration({
   };
 
   return (
-    <div className="lock-screen" role="dialog" aria-modal="true" aria-label="רישום מפעיל">
-      <div className="lock-card">
-        <div className="lock-logo-wrap">
-          <img src="/logo.png" alt="ARTIST 2.0" width={64} height={64} />
+    <div
+      className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-slate-50 via-zinc-50 to-cyan-50/30 p-4 font-sans"
+      role="dialog"
+      aria-modal="true"
+      aria-label="רישום מפעיל"
+    >
+      <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-xl backdrop-blur-md">
+        <div className="mb-6 flex justify-center">
+          <img
+            src="/logo.png"
+            alt="ARTIST 2.0"
+            width={64}
+            height={64}
+            className="rounded-2xl shadow-sm"
+          />
         </div>
 
-        <div className="lock-icon-wrap" aria-hidden>
+        <div
+          className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-cyan-100 text-xl"
+          aria-hidden
+        >
           👤
         </div>
 
-        <p className="lock-prompt">הזן שם משתמש — גורם מטפל</p>
-        <p className="lock-known-operator">
+        <h1 className="text-center text-lg font-extrabold text-slate-900">הזן שם משתמש — גורם מטפל</h1>
+        <p className="mt-2 text-center text-xs text-gray-500">
           נשמר לפי כתובת הרשת שלך. כל שינוי במערכת יירשם על שמך.
         </p>
 
-        <form className="lock-form" onSubmit={(e) => void handleSubmit(e)}>
+        <form className="mt-6 flex flex-col gap-3" onSubmit={(e) => void handleSubmit(e)}>
           <input
-            className="lock-input"
+            className="w-full rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
             type="text"
             inputMode="text"
             autoComplete="name"
@@ -67,13 +80,12 @@ export function OperatorRegistration({
             autoFocus
           />
           {(localError || error) && (
-            <p className="lock-error">{localError || error}</p>
+            <p className="text-center text-xs font-bold text-red-600">{localError || error}</p>
           )}
           <button
             type="submit"
-            className="lock-biometric lock-biometric--primary"
+            className="rounded-full bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
             disabled={busy}
-            style={{ marginTop: 12 }}
           >
             {busy ? "שומר..." : "המשך למערכת"}
           </button>

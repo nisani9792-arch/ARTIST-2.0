@@ -25,11 +25,17 @@ export function BulkActionsBar({
   if (selectedCount === 0) return null;
 
   return (
-    <div className="bulk-bar" role="toolbar" aria-label="פעולות מרובות">
-      <span className="bulk-bar__count">{selectedCount.toLocaleString("he-IL")} נבחרו</span>
+    <div
+      className="fixed bottom-4 start-1/2 z-50 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-md"
+      role="toolbar"
+      aria-label="פעולות מרובות"
+    >
+      <span className="text-xs font-bold text-slate-700">
+        {selectedCount.toLocaleString("he-IL")} נבחרו
+      </span>
 
       <select
-        className="bulk-bar__select"
+        className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
         value={bulkStatus}
         onChange={(e) => setBulkStatus(e.target.value as ArtistStatus)}
         aria-label="סטטוס מרוכז"
@@ -43,14 +49,14 @@ export function BulkActionsBar({
 
       <button
         type="button"
-        className="bulk-bar__btn bulk-bar__btn--primary"
+        className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700"
         onClick={() => onApplyStatus(bulkStatus)}
       >
         עדכון סטטוס
       </button>
 
       <input
-        className="bulk-bar__input"
+        className="w-36 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-cyan-500"
         placeholder="גורם מטפל חדש"
         list="bulk-handlers-list"
         value={bulkHandler}
@@ -70,7 +76,7 @@ export function BulkActionsBar({
 
       <button
         type="button"
-        className="bulk-bar__btn bulk-bar__btn--primary"
+        className="rounded-full bg-cyan-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-cyan-700 disabled:opacity-40"
         disabled={!bulkHandler.trim()}
         onClick={() => {
           onApplyHandler(bulkHandler.trim());
@@ -80,7 +86,11 @@ export function BulkActionsBar({
         עדכון מטפל
       </button>
 
-      <button type="button" className="bulk-bar__btn" onClick={onClearSelection}>
+      <button
+        type="button"
+        className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+        onClick={onClearSelection}
+      >
         נקה בחירה
       </button>
     </div>

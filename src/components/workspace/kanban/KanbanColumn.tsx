@@ -1,93 +1,110 @@
 "use client";
 
+import { useDroppable } from "@dnd-kit/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useRef, type DragEvent } from "react";
-import type { Artist } from "@/lib/types";
-import { KanbanCard } from "./KanbanCard";
-import { COMPACT_CARD_HEIGHT, type KanbanColumnId } from "./constants";
-import { buildDragIdPayload } from "./selection";
+import { useRef, type MouseEvent } from "react";
+import { cn } from "@/lib/cn";
+import type { Artist, ArtistStatus } from "@/lib/types";
+import { ARTIST_CARD_HEIGHT, ArtistCard } from "./ArtistCard";
 
-type KanbanColumnProps = {
-  columnId: KanbanColumnId;
+const columnHeaderAccent: Record<ArtistStatus, string> = {
+  in_process: "text-amber-700",
+  signed: "text-emerald-700",
+  unsigned: "text-slate-600",
+};
+
+const columnDot: Record<ArtistStatus, string> = {
+  in_process: "bg-amber-500",
+  signed: "bg-emerald-500",
+  unsigned: "bg-slate-400",
+};
+
+export type KanbanColumnProps = {
+  status: ArtistStatus;
   label: string;
-  tone: string;
   artists: Artist[];
   selectedIds: Set<string>;
-  dragOver: boolean;
-  onSelectArtist: (artist: Artist, event: React.MouseEvent) => void;
+  onSelectArtist: (artist: Artist, event: MouseEvent) => void;
   onOpenDetail: (artist: Artist) => void;
-  onDragOver: (event: DragEvent) => void;
-  onDragLeave: () => void;
-  onDrop: (event: DragEvent, columnId: KanbanColumnId) => void;
+  onSelectAll: (checked: boolean) => void;
 };
 
 export function KanbanColumn({
-  columnId,
+  status,
   label,
-  tone,
   artists,
   selectedIds,
-  dragOver,
   onSelectArtist,
   onOpenDetail,
-  onDragOver,
-  onDragLeave,
-  onDrop,
+  onSelectAll,
 }: KanbanColumnProps) {
-  const parentRef = useRef<HTMLDivElement>(null);
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
     count: artists.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => COMPACT_CARD_HEIGHT + 4,
-    overscan: 16,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ARTIST_CARD_HEIGHT + 8,
+    overscan: 10,
   });
 
-  const handleDragStart = (event: DragEvent, artistId: string) => {
-    const payload = buildDragIdPayload(artistId, selectedIds);
-    event.dataTransfer.setData("application/x-artist-ids", payload);
-    event.dataTransfer.effectAllowed = "move";
-  };
+  const allSelected = artists.length > 0 && artists.every((a) => selectedIds.has(a.id));
 
   return (
     <section
-      className={cnColumn(dragOver)}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={(event) => onDrop(event, columnId)}
-      aria-label={`עמודת ${label}`}
+      ref={setNodeRef}
+      className={cn(
+        "flex min-h-0 min-w-0 flex-1 flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-4",
+        "transition-colors duration-200",
+        isOver && "border-cyan-400 bg-cyan-50/40 ring-2 ring-cyan-200",
+      )}
     >
-      <header className="kanban-column__header">
-        <span className={`kanban-column__badge kanban-column__badge--${tone}`}>{label}</span>
-        <span className="kanban-column__count">{artists.length.toLocaleString("he-IL")}</span>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={cn("size-2 shrink-0 rounded-full", columnDot[status])} aria-hidden />
+          <h2 className={cn("truncate text-sm font-extrabold text-slate-800", columnHeaderAccent[status])}>
+            {label}
+          </h2>
+          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-bold text-gray-500 shadow-sm">
+            {artists.length.toLocaleString("he-IL")}
+          </span>
+        </div>
+
+        <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-medium text-gray-500">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={(e) => onSelectAll(e.target.checked)}
+            className="size-3.5 rounded border-slate-300 accent-cyan-600"
+          />
+          הכל
+        </label>
       </header>
 
-      <div ref={parentRef} className="kanban-column__scroll">
+      <div ref={scrollRef} className="kanban-scroll min-h-0 flex-1 overflow-y-auto pe-0.5">
         {artists.length === 0 ? (
-          <p className="kanban-column__empty">אין אומנים בעמודה זו</p>
+          <p className="py-8 text-center text-xs text-gray-500">אין אומנים בעמודה</p>
         ) : (
           <div
-            className="kanban-column__list"
+            className="relative w-full"
             style={{ height: `${virtualizer.getTotalSize()}px` }}
           >
-            {virtualizer.getVirtualItems().map((virtualRow) => {
-              const artist = artists[virtualRow.index];
+            {virtualizer.getVirtualItems().map((row) => {
+              const artist = artists[row.index];
               return (
                 <div
                   key={artist.id}
-                  className="kanban-column__item"
+                  className="absolute start-0 end-0 pb-2"
                   style={{
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
+                    height: `${row.size}px`,
+                    transform: `translateY(${row.start}px)`,
                   }}
                 >
-                  <KanbanCard
+                  <ArtistCard
                     artist={artist}
-                    tone={tone}
                     selected={selectedIds.has(artist.id)}
                     onSelect={(event) => onSelectArtist(artist, event)}
                     onOpenDetail={() => onOpenDetail(artist)}
-                    onDragStart={handleDragStart}
                   />
                 </div>
               );
@@ -97,8 +114,4 @@ export function KanbanColumn({
       </div>
     </section>
   );
-}
-
-function cnColumn(dragOver: boolean) {
-  return dragOver ? "kanban-column kanban-column--drop" : "kanban-column";
 }

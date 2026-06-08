@@ -10,12 +10,12 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useCallback, useRef, useState, type MouseEvent } from "react";
-import { selectRangeInColumn } from "@/components/workspace/kanban/selection";
 import { MAIN_BOARD_STATUSES, STATUS_META, type Artist, type ArtistStatus } from "@/lib/types";
-import { EliteKanbanCard } from "./EliteKanbanCard";
-import { EliteKanbanColumn } from "./EliteKanbanColumn";
+import { selectRangeInColumn } from "./selection";
+import { ArtistCard } from "./ArtistCard";
+import { KanbanColumn } from "./KanbanColumn";
 
-type EliteStatusKanbanProps = {
+export type KanbanBoardProps = {
   artists: Artist[];
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -24,20 +24,24 @@ type EliteStatusKanbanProps = {
   onBulkStatusChange: (ids: string[], status: ArtistStatus) => void;
 };
 
-export function EliteStatusKanban({
+export function KanbanBoard({
   artists,
   selectedIds,
   onToggleSelect,
   onSetSelection,
   onOpenDetail,
   onBulkStatusChange,
-}: EliteStatusKanbanProps) {
+}: KanbanBoardProps) {
   const [activeArtist, setActiveArtist] = useState<Artist | null>(null);
   const anchorIdRef = useRef<string | null>(null);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
 
-  const boardArtists = artists.filter((a) => a.status === "in_process" || a.status === "signed");
+  const boardArtists = artists.filter(
+    (a) => a.status === "in_process" || a.status === "signed",
+  );
 
   const grouped = MAIN_BOARD_STATUSES.map((status) => ({
     status,
@@ -89,9 +93,9 @@ export function EliteStatusKanban({
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="elite-kanban-grid">
+      <div className="flex min-h-0 flex-1 gap-4">
         {grouped.map(({ status, meta, items }) => (
-          <EliteKanbanColumn
+          <KanbanColumn
             key={status}
             status={status}
             label={meta.label}
@@ -103,14 +107,18 @@ export function EliteStatusKanban({
           />
         ))}
       </div>
-      <DragOverlay>
+
+      <DragOverlay dropAnimation={null}>
         {activeArtist ? (
-          <EliteKanbanCard
-            artist={activeArtist}
-            selected={selectedIds.has(activeArtist.id)}
-            onSelect={() => {}}
-            onOpenDetail={() => {}}
-          />
+          <div className="w-[280px] rotate-1 opacity-95">
+            <ArtistCard
+              artist={activeArtist}
+              selected={selectedIds.has(activeArtist.id)}
+              onSelect={() => {}}
+              onOpenDetail={() => {}}
+              draggable={false}
+            />
+          </div>
         ) : null}
       </DragOverlay>
     </DndContext>

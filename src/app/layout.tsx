@@ -44,7 +44,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#29abe2" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
-      <body className={heebo.variable}>
+      <body className={`${heebo.variable} font-sans antialiased bg-zinc-50 text-slate-900`}>
         <Providers>{children}</Providers>
       </body>
     </html>

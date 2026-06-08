@@ -3,15 +3,15 @@
 import { useCallback, useMemo, useState } from "react";
 import { ArtistDetailPanel } from "./ArtistDetailPanel";
 import { BulkActionsBar } from "./BulkActionsBar";
+import { CommandMenu } from "./CommandMenu";
 import { OdooAlertBanner } from "./OdooAlertBanner";
+import { QuickEditPanel } from "./QuickEditPanel";
+import { StatusFilterPills } from "./StatusFilterPills";
+import { StatusProgressBar } from "./StatusProgressBar";
+import { UnsignedVault } from "./UnsignedVault";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
-import { CommandMenu } from "@/components/elite/CommandMenu";
-import { EliteStatusKanban } from "@/components/elite/EliteStatusKanban";
-import { QuickEditPanel } from "@/components/elite/QuickEditPanel";
-import { StatusFilterPills } from "@/components/elite/StatusFilterPills";
-import { StatusProgressBar } from "@/components/elite/StatusProgressBar";
-import { UnsignedVault } from "@/components/elite/UnsignedVault";
-import "@/components/elite/elite-workspace.css";
+import { KanbanBoard } from "./kanban/KanbanBoard";
+import { WorkspaceLoadingSkeleton } from "./WorkspaceLoadingSkeleton";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useArtists } from "@/hooks/useArtists";
 import { InstallPrompt } from "@/components/m3/InstallPrompt";
@@ -153,12 +153,15 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
   };
 
   return (
-    <div className="workspace workspace--kanban">
+    <div className="flex h-dvh flex-col overflow-hidden bg-zinc-50 font-sans">
       <ServiceWorkerRegister />
       <InstallPrompt />
 
       {offline && (
-        <div className="odoo-alert" role="status">
+        <div
+          className="border-b border-slate-200 bg-slate-100 px-4 py-2 text-center text-xs text-slate-600"
+          role="status"
+        >
           מצב לא מקוון — עבודה עם נתונים שמורים במכשיר
         </div>
       )}
@@ -182,21 +185,26 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
 
       <OdooAlertBanner count={odooPendingCount} />
 
-      <div className="workspace__body elite-workspace">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
         <StatusProgressBar stats={stats} />
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }}>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <StatusFilterPills stats={stats} />
-          <button type="button" className="bulk-bar__btn" onClick={() => setCommandOpen(true)}>
-            🔍 חיפוש מהיר (Ctrl+K)
+          <button
+            type="button"
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-300 hover:text-blue-700"
+            onClick={() => setCommandOpen(true)}
+          >
+            חיפוש מהיר (Ctrl+K)
           </button>
         </div>
 
         {isLoading ? (
-          <div className="workspace__loading">טוען אומנים...</div>
+          <WorkspaceLoadingSkeleton />
         ) : (
-          <div className="elite-main-layout">
-            <div className="elite-board">
-              <EliteStatusKanban
+          <div className="flex min-h-0 flex-1 gap-4">
+            <div className="flex min-h-0 min-w-0 flex-1">
+              <KanbanBoard
                 artists={artists}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelected}
@@ -241,7 +249,9 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
 
       <button
         type="button"
-        className="workspace-fab"
+        className={`fixed end-4 z-40 flex size-12 items-center justify-center rounded-full bg-blue-600 text-2xl font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-xl ${
+          selectedIds.size > 0 ? "bottom-24" : "bottom-20"
+        }`}
         aria-label="הוסף אומן"
         onClick={() => {
           const name = window.prompt("שם אומן חדש:");
@@ -256,7 +266,12 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
       </button>
 
       {toast && (
-        <div className="workspace-toast" role="status">
+        <div
+          className={`fixed end-4 z-[60] rounded-2xl border border-slate-200 bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg ${
+            selectedIds.size > 0 ? "bottom-28" : "bottom-4"
+          }`}
+          role="status"
+        >
           {toast}
         </div>
       )}
