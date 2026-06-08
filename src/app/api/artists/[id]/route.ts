@@ -5,7 +5,7 @@ import { requireAccess } from "@/lib/access/require-access";
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).optional(),
-  isSigned: z.boolean().optional(),
+  status: z.enum(["signed", "unsigned", "in_process"]).optional(),
   isOdooApproved: z.boolean().optional(),
   handlerName: z.string().trim().min(1).optional(),
 });

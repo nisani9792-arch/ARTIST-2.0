@@ -1,21 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Artist } from "@/lib/types";
+import type { Artist, ArtistStats, ArtistStatus } from "@/lib/types";
 
-async function fetchArtists(q?: string): Promise<Artist[]> {
+type ArtistsResponse = { artists: Artist[]; stats: ArtistStats };
+
+async function fetchArtists(q?: string): Promise<ArtistsResponse> {
   const params = q ? `?q=${encodeURIComponent(q)}` : "";
   const res = await fetch(`/api/artists${params}`);
   if (!res.ok) throw new Error("טעינה נכשלה");
-  const data = await res.json();
-  return data.artists;
-}
-
-async function fetchStuckIds(): Promise<string[]> {
-  const res = await fetch("/api/ai/suggestions");
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.stuckIds ?? [];
+  return res.json();
 }
 
 export function useArtists(search: string) {
@@ -24,12 +18,6 @@ export function useArtists(search: string) {
   const artistsQuery = useQuery({
     queryKey: ["artists", search],
     queryFn: () => fetchArtists(search || undefined),
-  });
-
-  const stuckQuery = useQuery({
-    queryKey: ["stuck-ids"],
-    queryFn: fetchStuckIds,
-    refetchInterval: 5 * 60 * 1000,
   });
 
   const createMutation = useMutation({
@@ -51,7 +39,7 @@ export function useArtists(search: string) {
       patch,
     }: {
       id: string;
-      patch: Partial<Pick<Artist, "name" | "isSigned" | "isOdooApproved" | "handlerName">>;
+      patch: Partial<Pick<Artist, "name" | "status" | "isOdooApproved" | "handlerName">>;
     }) => {
       const res = await fetch(`/api/artists/${id}`, {
         method: "PATCH",
@@ -63,9 +51,14 @@ export function useArtists(search: string) {
     },
     onMutate: async ({ id, patch }) => {
       await queryClient.cancelQueries({ queryKey: ["artists"] });
-      const previous = queryClient.getQueriesData<Artist[]>({ queryKey: ["artists"] });
-      queryClient.setQueriesData<Artist[]>({ queryKey: ["artists"] }, (old) =>
-        old?.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+      const previous = queryClient.getQueriesData<ArtistsResponse>({ queryKey: ["artists"] });
+      queryClient.setQueriesData<ArtistsResponse>({ queryKey: ["artists"] }, (old) =>
+        old
+          ? {
+              ...old,
+              artists: old.artists.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+            }
+          : old,
       );
       return { previous };
     },
@@ -79,24 +72,21 @@ export function useArtists(search: string) {
     mutationFn: async ({
       ids,
       handlerName,
-      isSigned,
+      status,
     }: {
       ids: string[];
       handlerName?: string;
-      isSigned?: boolean;
+      status?: ArtistStatus;
     }) => {
       const res = await fetch("/api/artists/bulk", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, handlerName, isSigned }),
+        body: JSON.stringify({ ids, handlerName, status }),
       });
       if (!res.ok) throw new Error("עדכון מרובה נכשל");
       return res.json();
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["artists"] });
-      queryClient.invalidateQueries({ queryKey: ["stuck-ids"] });
-    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
   });
 
   const commandMutation = useMutation({
@@ -110,16 +100,13 @@ export function useArtists(search: string) {
       if (!res.ok) throw new Error(data.error || "פקודה נכשלה");
       return data as { message: string; affected: number };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["artists"] });
-      queryClient.invalidateQueries({ queryKey: ["stuck-ids"] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
   });
 
   return {
-    artists: artistsQuery.data ?? [],
+    artists: artistsQuery.data?.artists ?? [],
+    stats: artistsQuery.data?.stats,
     isLoading: artistsQuery.isLoading,
-    stuckIds: new Set(stuckQuery.data ?? []),
     createArtist: createMutation.mutateAsync,
     updateArtist: updateMutation.mutateAsync,
     bulkUpdate: bulkMutation.mutateAsync,

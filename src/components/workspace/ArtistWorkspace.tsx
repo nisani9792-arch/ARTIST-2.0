@@ -5,13 +5,19 @@ import { ArtistDetailPanel } from "./ArtistDetailPanel";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { OdooAlertBanner } from "./OdooAlertBanner";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
-import { KanbanBoard } from "./kanban/KanbanBoard";
-import type { KanbanColumnId } from "./kanban/constants";
+import { CommandMenu } from "@/components/elite/CommandMenu";
+import { EliteStatusKanban } from "@/components/elite/EliteStatusKanban";
+import { QuickEditPanel } from "@/components/elite/QuickEditPanel";
+import { StatusFilterPills } from "@/components/elite/StatusFilterPills";
+import { StatusProgressBar } from "@/components/elite/StatusProgressBar";
+import { UnsignedVault } from "@/components/elite/UnsignedVault";
+import "@/components/elite/elite-workspace.css";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useArtists } from "@/hooks/useArtists";
 import { InstallPrompt } from "@/components/m3/InstallPrompt";
 import { ServiceWorkerRegister } from "@/components/m3/ServiceWorkerRegister";
-import type { Artist } from "@/lib/types";
+import type { Artist, ArtistStatus } from "@/lib/types";
+import { useUiStore } from "@/stores";
 
 type ArtistWorkspaceProps = {
   operatorName?: string | null;
@@ -26,11 +32,16 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
   const [detailArtist, setDetailArtist] = useState<Artist | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  const statusFilter = useUiStore((s) => s.statusFilter);
+  const setQuickEditArtistId = useUiStore((s) => s.setQuickEditArtistId);
+  const setCommandOpen = useUiStore((s) => s.setCommandOpen);
+  const quickEditId = useUiStore((s) => s.quickEditArtistId);
+
   const debouncedSearch = useDebouncedValue(search, 150);
   const {
-    artists,
+    artists: allArtists,
+    stats,
     isLoading,
-    stuckIds,
     createArtist,
     updateArtist,
     bulkUpdate,
@@ -38,14 +49,29 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
     isCommandPending,
   } = useArtists(debouncedSearch);
 
+  const artists = useMemo(() => {
+    if (statusFilter === "all") return allArtists;
+    return allArtists.filter((a) => a.status === statusFilter);
+  }, [allArtists, statusFilter]);
+
+  const vaultArtists = useMemo(
+    () => artists.filter((a) => a.status === "unsigned"),
+    [artists],
+  );
+
+  const quickEditArtist = useMemo(
+    () => (quickEditId ? artists.find((a) => a.id === quickEditId) ?? null : null),
+    [artists, quickEditId],
+  );
+
   const handlers = useMemo(() => {
-    const set = new Set(artists.map((a) => a.handlerName).filter(Boolean));
+    const set = new Set(allArtists.map((a) => a.handlerName).filter(Boolean));
     return [...set].sort((a, b) => a.localeCompare(b, "he"));
-  }, [artists]);
+  }, [allArtists]);
 
   const odooPendingCount = useMemo(
-    () => artists.filter((a) => a.isSigned && !a.isOdooApproved).length,
-    [artists],
+    () => allArtists.filter((a) => a.status === "signed" && !a.isOdooApproved).length,
+    [allArtists],
   );
 
   const showToast = (message: string) => {
@@ -77,15 +103,10 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
   }, [artists]);
 
   const handleBulkStatusChange = useCallback(
-    async (ids: string[], columnId: KanbanColumnId) => {
-      if (columnId === "stuck") {
-        showToast("עמודת תקוע מזוהה אוטומטית ע״י AI — גרור לחתום או לא חתום");
-        return;
-      }
-      const isSigned = columnId === "signed";
+    async (ids: string[], status: ArtistStatus) => {
       try {
-        await bulkUpdate({ ids, isSigned });
-        showToast(`עודכנו ${ids.length} אומנים ל${isSigned ? "חתום" : "לא חתום"}`);
+        await bulkUpdate({ ids, status });
+        showToast(`עודכנו ${ids.length} אומנים`);
         setSelectedIds(new Set());
       } catch {
         showToast("עדכון סטטוס נכשל");
@@ -93,6 +114,11 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
     },
     [bulkUpdate],
   );
+
+  const openArtist = (artist: Artist) => {
+    setQuickEditArtistId(artist.id);
+    setDetailArtist(artist);
+  };
 
   const handleQuickCreate = async () => {
     const name = quickName.trim();
@@ -119,7 +145,7 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
   };
 
   const handleSaveDetail = async (
-    patch: Partial<Pick<Artist, "name" | "handlerName" | "isSigned" | "isOdooApproved">>,
+    patch: Partial<Pick<Artist, "name" | "handlerName" | "status" | "isOdooApproved">>,
   ) => {
     if (!detailArtist) return;
     await updateArtist({ id: detailArtist.id, patch });
@@ -156,28 +182,51 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
 
       <OdooAlertBanner count={odooPendingCount} />
 
-      <div className="workspace__body">
+      <div className="workspace__body elite-workspace">
+        <StatusProgressBar stats={stats} />
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }}>
+          <StatusFilterPills stats={stats} />
+          <button type="button" className="bulk-bar__btn" onClick={() => setCommandOpen(true)}>
+            🔍 חיפוש מהיר (Ctrl+K)
+          </button>
+        </div>
+
         {isLoading ? (
           <div className="workspace__loading">טוען אומנים...</div>
         ) : (
-          <KanbanBoard
-            artists={artists}
-            stuckIds={stuckIds}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelected}
-            onSetSelection={setSelection}
-            onOpenDetail={setDetailArtist}
-            onBulkStatusChange={handleBulkStatusChange}
-          />
+          <div className="elite-main-layout">
+            <div className="elite-board">
+              <EliteStatusKanban
+                artists={artists}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelected}
+                onSetSelection={setSelection}
+                onOpenDetail={openArtist}
+                onBulkStatusChange={handleBulkStatusChange}
+              />
+            </div>
+            <UnsignedVault
+              artists={vaultArtists}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelected}
+              onOpenDetail={openArtist}
+            />
+            <QuickEditPanel
+              artist={quickEditArtist}
+              handlers={handlers}
+              onSave={(id, patch) => {
+                void updateArtist({ id, patch });
+                showToast("נשמר");
+              }}
+            />
+          </div>
         )}
       </div>
 
       <BulkActionsBar
         selectedCount={selectedIds.size}
         handlers={handlers}
-        onApplyStatus={(status) => {
-          void handleBulkStatusChange([...selectedIds], status);
-        }}
+        onApplyStatus={(status) => void handleBulkStatusChange([...selectedIds], status)}
         onApplyHandler={async (handler) => {
           try {
             await bulkUpdate({ ids: [...selectedIds], handlerName: handler });
@@ -216,6 +265,12 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
         artist={detailArtist}
         onClose={() => setDetailArtist(null)}
         onSave={handleSaveDetail}
+      />
+
+      <CommandMenu
+        artists={allArtists}
+        onStatusChange={(id, status) => void handleBulkStatusChange([id], status)}
+        onOpenDetail={openArtist}
       />
     </div>
   );

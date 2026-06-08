@@ -1,3 +1,5 @@
+import { STATUS_META, type ArtistStatus } from "./types";
+
 export function formatHebrewDateTime(iso: string): string {
   try {
     return new Intl.DateTimeFormat("he-IL", {
@@ -9,6 +11,6 @@ export function formatHebrewDateTime(iso: string): string {
   }
 }
 
-export function statusLabel(isSigned: boolean): string {
-  return isSigned ? "חתום" : "לא חתום";
+export function statusLabel(status: ArtistStatus): string {
+  return STATUS_META[status]?.label ?? status;
 }

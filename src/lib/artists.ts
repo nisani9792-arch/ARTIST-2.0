@@ -3,9 +3,11 @@ import { db } from "./db";
 import { artists } from "./db/schema";
 import {
   DEFAULT_HANDLER,
-  signedToStatus,
+  normalizeStatus,
   toArtist,
   type Artist,
+  type ArtistStats,
+  type ArtistStatus,
 } from "./types";
 
 export async function listArtists(query?: string): Promise<Artist[]> {
@@ -27,6 +29,24 @@ export async function listArtists(query?: string): Promise<Artist[]> {
   return rows.map(toArtist);
 }
 
+export async function getArtistStats(): Promise<ArtistStats> {
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      signed: sql<number>`count(*) filter (where ${artists.status} = 'signed')::int`,
+      unsigned: sql<number>`count(*) filter (where ${artists.status} = 'unsigned')::int`,
+      in_process: sql<number>`count(*) filter (where ${artists.status} in ('in_process', 'stuck'))::int`,
+    })
+    .from(artists);
+
+  return {
+    total: row?.total ?? 0,
+    signed: row?.signed ?? 0,
+    unsigned: row?.unsigned ?? 0,
+    in_process: row?.in_process ?? 0,
+  };
+}
+
 export async function createArtist(name: string): Promise<Artist> {
   const id = crypto.randomUUID();
   const [row] = await db
@@ -44,31 +64,28 @@ export async function createArtist(name: string): Promise<Artist> {
   return toArtist(row);
 }
 
-export async function updateArtist(
-  id: string,
-  patch: Partial<Pick<Artist, "name" | "isSigned" | "isOdooApproved" | "handlerName">>,
-): Promise<Artist | null> {
+type ArtistPatch = Partial<
+  Pick<Artist, "name" | "status" | "isOdooApproved" | "handlerName">
+>;
+
+export async function updateArtist(id: string, patch: ArtistPatch): Promise<Artist | null> {
   const values: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
   };
 
   if (patch.name !== undefined) values.nameHe = patch.name.trim();
-  if (patch.isSigned !== undefined) values.status = signedToStatus(patch.isSigned);
+  if (patch.status !== undefined) values.status = patch.status;
   if (patch.isOdooApproved !== undefined) values.isOdooApproved = patch.isOdooApproved;
   if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();
 
-  const [row] = await db
-    .update(artists)
-    .set(values)
-    .where(eq(artists.id, id))
-    .returning();
+  const [row] = await db.update(artists).set(values).where(eq(artists.id, id)).returning();
 
   return row ? toArtist(row) : null;
 }
 
 export async function bulkUpdateArtists(
   ids: string[],
-  patch: Partial<Pick<Artist, "handlerName" | "isSigned">>,
+  patch: Partial<Pick<Artist, "handlerName" | "status">>,
 ): Promise<Artist[]> {
   if (ids.length === 0) return [];
 
@@ -77,7 +94,7 @@ export async function bulkUpdateArtists(
   };
 
   if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();
-  if (patch.isSigned !== undefined) values.status = signedToStatus(patch.isSigned);
+  if (patch.status !== undefined) values.status = patch.status;
 
   const rows = await db
     .update(artists)
@@ -92,9 +109,7 @@ export async function findStuckArtists(days = 14): Promise<Artist[]> {
   const rows = await db
     .select()
     .from(artists)
-    .where(
-      lt(artists.updatedAt, sql`now() - make_interval(days => ${days})`),
-    );
+    .where(lt(artists.updatedAt, sql`now() - make_interval(days => ${days})`));
 
   return rows.map(toArtist);
 }
@@ -102,15 +117,15 @@ export async function findStuckArtists(days = 14): Promise<Artist[]> {
 export async function reassignHandlerByFilter(input: {
   fromHandler?: string;
   toHandler: string;
-  isSigned?: boolean;
+  status?: ArtistStatus;
 }): Promise<number> {
   const conditions = [];
 
   if (input.fromHandler) {
     conditions.push(eq(artists.owner, input.fromHandler));
   }
-  if (input.isSigned !== undefined) {
-    conditions.push(eq(artists.status, signedToStatus(input.isSigned)));
+  if (input.status !== undefined) {
+    conditions.push(eq(artists.status, input.status));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -128,17 +143,17 @@ export async function reassignHandlerByFilter(input: {
 }
 
 export async function markSignedByFilter(input: {
-  isSigned: boolean;
+  status: ArtistStatus;
   handlerName?: string;
-  fromSigned?: boolean;
+  fromStatus?: ArtistStatus;
 }): Promise<number> {
   const conditions = [];
 
   if (input.handlerName) {
     conditions.push(eq(artists.owner, input.handlerName));
   }
-  if (input.fromSigned !== undefined) {
-    conditions.push(eq(artists.status, signedToStatus(input.fromSigned)));
+  if (input.fromStatus !== undefined) {
+    conditions.push(eq(artists.status, input.fromStatus));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -146,11 +161,20 @@ export async function markSignedByFilter(input: {
   const rows = await db
     .update(artists)
     .set({
-      status: signedToStatus(input.isSigned),
+      status: input.status,
       updatedAt: new Date().toISOString(),
     })
     .where(whereClause)
     .returning({ id: artists.id });
 
+  return rows.length;
+}
+
+export async function migrateStuckToInProcess(): Promise<number> {
+  const rows = await db
+    .update(artists)
+    .set({ status: "in_process", updatedAt: new Date().toISOString() })
+    .where(eq(artists.status, "stuck"))
+    .returning({ id: artists.id });
   return rows.length;
 }

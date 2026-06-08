@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createArtist, listArtists } from "@/lib/artists";
+import { createArtist, getArtistStats, listArtists } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
 
 export async function GET(request: NextRequest) {
@@ -8,8 +8,8 @@ export async function GET(request: NextRequest) {
     const access = await requireAccess();
     if (!access.ok) return access.response;
     const q = request.nextUrl.searchParams.get("q") ?? undefined;
-    const artists = await listArtists(q);
-    return NextResponse.json({ artists });
+    const [artists, stats] = await Promise.all([listArtists(q), getArtistStats()]);
+    return NextResponse.json({ artists, stats });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "שגיאה בטעינת אומנים" }, { status: 500 });

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import type { KanbanColumnId } from "./kanban/constants";
+import type { ArtistStatus } from "@/lib/types";
+import { STATUS_META } from "@/lib/types";
 
 type BulkActionsBarProps = {
   selectedCount: number;
   handlers: string[];
-  onApplyStatus: (status: KanbanColumnId) => void;
+  onApplyStatus: (status: ArtistStatus) => void;
   onApplyHandler: (handler: string) => void;
   onClearSelection: () => void;
 };
@@ -18,7 +19,7 @@ export function BulkActionsBar({
   onApplyHandler,
   onClearSelection,
 }: BulkActionsBarProps) {
-  const [bulkStatus, setBulkStatus] = useState<KanbanColumnId>("unsigned");
+  const [bulkStatus, setBulkStatus] = useState<ArtistStatus>("unsigned");
   const [bulkHandler, setBulkHandler] = useState("");
 
   if (selectedCount === 0) return null;
@@ -30,11 +31,14 @@ export function BulkActionsBar({
       <select
         className="bulk-bar__select"
         value={bulkStatus}
-        onChange={(e) => setBulkStatus(e.target.value as KanbanColumnId)}
+        onChange={(e) => setBulkStatus(e.target.value as ArtistStatus)}
         aria-label="סטטוס מרוכז"
       >
-        <option value="unsigned">לא חתום</option>
-        <option value="signed">חתום</option>
+        {(Object.keys(STATUS_META) as ArtistStatus[]).map((status) => (
+          <option key={status} value={status}>
+            {STATUS_META[status].label}
+          </option>
+        ))}
       </select>
 
       <button

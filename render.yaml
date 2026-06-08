@@ -1,8 +1,10 @@
-# Blueprint — חובה ליצור שירות מ-Blueprint או לסנכרן קיים
+# Blueprint — ARTIST 2.0 (JUSIC ELITE PRO)
 # Docker מתעלם לחלוטין מ-Build Command השגוי (pm install)
 services:
   - type: web
     name: artist-2-0
+    repo: https://github.com/nisani9792-arch/ARTIST-2.0
+    branch: main
     runtime: docker
     plan: free
     region: frankfurt

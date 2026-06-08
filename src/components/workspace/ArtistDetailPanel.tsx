@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { formatHebrewDateTime, statusLabel } from "@/lib/format";
-import type { Artist } from "@/lib/types";
+import { STATUS_META, type Artist, type ArtistStatus } from "@/lib/types";
 
 type ArtistDetailPanelProps = {
   artist: Artist | null;
   onClose: () => void;
-  onSave: (patch: Partial<Pick<Artist, "name" | "handlerName" | "isSigned" | "isOdooApproved">>) => Promise<void>;
+  onSave: (
+    patch: Partial<Pick<Artist, "name" | "handlerName" | "status" | "isOdooApproved">>,
+  ) => Promise<void>;
 };
 
 export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanelProps) {
   const [name, setName] = useState("");
   const [handler, setHandler] = useState("");
-  const [isSigned, setIsSigned] = useState(false);
+  const [status, setStatus] = useState<ArtistStatus>("unsigned");
   const [isOdooApproved, setIsOdooApproved] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -21,7 +23,7 @@ export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanel
     if (!artist) return;
     setName(artist.name);
     setHandler(artist.handlerName);
-    setIsSigned(artist.isSigned);
+    setStatus(artist.status);
     setIsOdooApproved(artist.isOdooApproved);
   }, [artist]);
 
@@ -33,7 +35,7 @@ export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanel
       await onSave({
         name: name.trim(),
         handlerName: handler.trim(),
-        isSigned,
+        status,
         isOdooApproved,
       });
       onClose();
@@ -61,29 +63,27 @@ export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanel
         <div className="detail-panel__body">
           <label className="detail-field">
             <span>שם אומן</span>
-            <input
-              className="m3-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <input className="m3-input" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
 
           <label className="detail-field">
             <span>גורם מטפל</span>
-            <input
-              className="m3-input"
-              value={handler}
-              onChange={(e) => setHandler(e.target.value)}
-            />
+            <input className="m3-input" value={handler} onChange={(e) => setHandler(e.target.value)} />
           </label>
 
-          <label className="detail-field detail-field--row">
-            <input
-              type="checkbox"
-              checked={isSigned}
-              onChange={(e) => setIsSigned(e.target.checked)}
-            />
-            <span>חתום ({statusLabel(isSigned)})</span>
+          <label className="detail-field">
+            <span>סטטוס</span>
+            <select
+              className="m3-input"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as ArtistStatus)}
+            >
+              {(Object.keys(STATUS_META) as ArtistStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_META[s].label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="detail-field detail-field--row">
@@ -95,22 +95,14 @@ export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanel
             <span>מאושר באודו</span>
           </label>
 
-          <p className="detail-panel__meta">
-            עודכן לאחרונה: {formatHebrewDateTime(artist.lastActionTimestamp)}
+          <p className="detail-meta">
+            סטטוס נוכחי: {statusLabel(status)} · עודכן {formatHebrewDateTime(artist.lastActionTimestamp)}
           </p>
         </div>
 
         <footer className="detail-panel__footer">
-          <button type="button" className="m3-btn" onClick={onClose}>
-            ביטול
-          </button>
-          <button
-            type="button"
-            className="m3-btn m3-btn--filled"
-            disabled={busy || !name.trim()}
-            onClick={() => void handleSave()}
-          >
-            {busy ? "שומר..." : "שמור"}
+          <button type="button" className="m3-btn m3-btn--primary" disabled={busy} onClick={() => void handleSave()}>
+            {busy ? "שומר…" : "שמור"}
           </button>
         </footer>
       </aside>

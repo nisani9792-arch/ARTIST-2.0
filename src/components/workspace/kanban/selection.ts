@@ -30,12 +30,3 @@ export const selectRangeInColumn = (
   const [from, to] = start < end ? [start, end] : [end, start];
   return ids.slice(from, to + 1);
 };
-
-export const groupArtistsByColumn = (
-  artists: Artist[],
-  stuckIds: Set<string>,
-): Record<"unsigned" | "stuck" | "signed", Artist[]> => ({
-  unsigned: artists.filter((a) => !a.isSigned && !stuckIds.has(a.id)),
-  stuck: artists.filter((a) => !a.isSigned && stuckIds.has(a.id)),
-  signed: artists.filter((a) => a.isSigned),
-});

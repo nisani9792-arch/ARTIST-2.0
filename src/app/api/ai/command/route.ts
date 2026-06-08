@@ -7,6 +7,7 @@ import {
   reassignHandlerByFilter,
 } from "@/lib/artists";
 import { isGeminiConfigured, parseHebrewCommand } from "@/lib/gemini";
+import { STATUS_META } from "@/lib/types";
 import { requireAccess } from "@/lib/access/require-access";
 
 const bodySchema = z.object({
@@ -24,13 +25,15 @@ export async function POST(request: NextRequest) {
     const { command } = bodySchema.parse(await request.json());
     const artists = await listArtists();
     const handlers = [...new Set(artists.map((a) => a.handlerName))];
-    const unsignedCount = artists.filter((a) => !a.isSigned).length;
-    const signedCount = artists.filter((a) => a.isSigned).length;
+    const unsignedCount = artists.filter((a) => a.status === "unsigned").length;
+    const signedCount = artists.filter((a) => a.status === "signed").length;
+    const inProcessCount = artists.filter((a) => a.status === "in_process").length;
 
     const parsed = await parseHebrewCommand(command, {
       handlers,
       unsignedCount,
       signedCount,
+      inProcessCount,
     });
 
     let affected = 0;
@@ -41,17 +44,17 @@ export async function POST(request: NextRequest) {
         affected = await reassignHandlerByFilter({
           fromHandler: parsed.fromHandler,
           toHandler: parsed.toHandler,
-          isSigned: parsed.filter?.isSigned,
+          status: parsed.filter?.status,
         });
         message = `עודכנו ${affected} אומנים — מטפל חדש: ${parsed.toHandler}`;
         break;
-      case "mark_signed":
+      case "mark_status":
         affected = await markSignedByFilter({
-          isSigned: parsed.isSigned,
+          status: parsed.status,
           handlerName: parsed.filter?.handlerName,
-          fromSigned: parsed.filter?.fromSigned,
+          fromStatus: parsed.filter?.fromStatus,
         });
-        message = `עודכנו ${affected} אומנים — סטטוס: ${parsed.isSigned ? "חתום" : "לא חתום"}`;
+        message = `עודכנו ${affected} אומנים — סטטוס: ${STATUS_META[parsed.status].label}`;
         break;
       case "bulk_handler":
         await bulkUpdateArtists(parsed.ids, { handlerName: parsed.handlerName });

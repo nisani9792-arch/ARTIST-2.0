@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" href="LOGO.png" type="image/png">
+    <link rel="apple-touch-icon" href="LOGO.png">
+    <title>JUSIC ELITE | PRO CRM</title>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="data.js" onerror="console.warn('קובץ data.js לא נמצא.')"></script>
+
+    <style>
+        :root {
+            --bg: #0f1115; --surface: #1e1e24; --surface-variant: #2a2b32;
+            --on-surface: #ffffff; --on-surface-variant: #b0b0b0; --primary: #29C5D0; --outline: rgba(255, 255, 255, 0.1);
+            --status-signed: rgba(76, 175, 80, 0.25); --status-failed: rgba(255, 193, 7, 0.2); --status-rejected: rgba(244, 67, 54, 0.25);
+            --glass-bg: rgba(30, 30, 36, 0.7);
+        }
+        body.light-mode {
+            --bg: #f2f4f7; --surface: #ffffff; --surface-variant: #f1f3f5;
+            --on-surface: #1a1c1e; --on-surface-variant: #5f6368; --outline: rgba(0, 0, 0, 0.08);
+            --status-signed: rgba(76, 175, 80, 0.2); --status-failed: rgba(255, 193, 7, 0.2); --status-rejected: rgba(244, 67, 54, 0.2);
+            --glass-bg: rgba(255, 255, 255, 0.75);
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        /* הסרתי את ה- transition 0.3s הגורף שהיה כאן וגרם לאיטיות! */
+        body { font-family: 'Heebo', sans-serif; background-color: var(--bg); color: var(--on-surface); margin: 0; padding: 10px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--surface-variant); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+        #splashScreen { position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #000000 !important; transition: opacity 0.5s; }
+        #splashScreen.hide { opacity: 0; pointer-events: none; }
+        .login-card { background: var(--surface); border: 1px solid var(--outline); border-radius: 24px; padding: 30px; width: 380px; max-width:95%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); margin: auto;}
+
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px; border-radius: 20px; margin-bottom: 10px; background: var(--glass-bg); backdrop-filter: blur(12px); border: 1px solid var(--outline); z-index: 100; gap:10px;}
+        .logo-img { height: 40px; cursor: pointer; transition: transform 0.2s; }
+        .main-title { font-weight: 900; font-size: 1.3rem; color: var(--on-surface); margin: 0; white-space: nowrap;}
+        .header-actions { display: flex; align-items: center; gap: 8px; }
+        .icon-btn { background: var(--surface); border: 1px solid var(--outline); color: var(--on-surface); width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, background 0.2s; font-size: 1.2rem;}
+        .icon-btn:hover { background: var(--primary); color: #000; border-color: var(--primary); transform: translateY(-2px);}
+        .user-pill { display: flex; align-items: center; gap: 8px; background: var(--surface-variant); padding: 4px 12px; border-radius: 100px; cursor: pointer; border: 1px solid var(--outline); transition: border-color 0.2s;}
+        .user-pill:hover { background: var(--surface); border-color: var(--primary); }
+
+        /* Progress Bar */
+        .progress-container { width: 100%; height: 6px; background: var(--surface-variant); border-radius: 10px; overflow: hidden; margin-bottom: 15px; display:flex;}
+        .progress-bar { height: 100%; transition: width 0.4s ease; }
+        .progress-bar.green { background: #4CAF50; }
+        .progress-bar.yellow { background: #FFC107; }
+        .progress-bar.red { background: #F44336; }
+
+        /* Top Bar Filters */
+        .top-bar { display: flex; gap: 10px; margin-bottom: 15px; justify-content: space-between; align-items: center; flex-wrap: wrap;}
+        .filters-group { display: flex; gap: 8px; flex-wrap: wrap; flex:1; align-items:center;}
+        .search-input, .filter-select { background: var(--surface); border: 1px solid var(--outline); border-radius: 100px; padding: 8px 15px; color: var(--on-surface); font-family: inherit; outline: none; transition: border-color 0.2s; max-width: 160px; font-size:0.9rem;}
+        .search-input:focus { border-color: var(--primary); }
+        .stats-group { display: flex; gap: 8px; flex-wrap: wrap; }
+        .stat-btn { background: var(--surface); padding: 6px 14px; border-radius: 100px; border: 1px solid var(--outline); font-size: 0.85rem; font-weight: 700; color: var(--on-surface); cursor: pointer; transition: opacity 0.2s, background 0.2s; display:flex; align-items:center; gap:5px; opacity: 0.6;}
+        .stat-btn.active { background: var(--surface-variant); border-color: var(--primary); opacity: 1; box-shadow: 0 0 10px rgba(41,197,208,0.2);}
+        .stat-btn:hover { opacity: 1; }
+
+        /* Main Layout */
+        .main-layout { display: flex; gap: 15px; flex-grow: 1; overflow: hidden; padding-bottom: 10px; }
+        
+        /* Sidebar Folders */
+        .sidebar { width: 230px; background: var(--surface); border-radius: 20px; border: 1px solid var(--outline); display: flex; flex-direction: column; padding: 15px; flex-shrink: 0; overflow-y:auto;}
+        .sidebar.hidden { display: none; }
+        .folder-item { padding: 10px; border-radius: 12px; margin-bottom: 5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; font-size: 0.9rem; font-weight: 600; border: 1px solid transparent;}
+        .folder-item:hover, .folder-item.drag-over { background: var(--surface-variant); }
+        .folder-item.active { background: rgba(41,197,208,0.1); border-color: var(--primary); color: var(--primary); }
+        .folder-item.trash { color: #ff5252; margin-top: auto; border-top: 1px solid var(--outline); border-radius: 0; padding-top: 15px;}
+        .folder-count { background: var(--bg); padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; }
+
+        .content-area { flex-grow: 1; display: flex; gap: 15px; overflow: hidden; position: relative;}
+        
+        /* Kanban View */
+        .kanban-view { display: flex; gap: 15px; width: 100%; height: 100%; overflow-x: auto; }
+        .kanban-column { background: var(--surface); border-radius: 24px; padding: 15px; padding-top: 5px; display: flex; flex-direction: column; overflow-y: auto; border: 2px solid var(--outline); flex: 1; min-width: 260px;}
+        .kanban-column.drag-over { border-color: var(--primary); background: rgba(41,197,208,0.05); }
+        
+        .col-header { position: sticky; top: 10px; z-index: 10; background: var(--glass-bg); backdrop-filter: blur(15px); padding: 8px 15px; display:flex; justify-content:space-between; align-items:center; margin: 0 auto 15px auto; font-size: 1rem; border-radius: 100px; font-weight: 800; border: 1px solid var(--outline); color: var(--on-surface); cursor: grab; transition: border-color 0.2s; width: 100%;}
+        .col-header:hover { border-color: var(--primary); box-shadow: 0 4px 10px rgba(41,197,208,0.2); }
+        .col-header input[type="text"] { background: transparent; border: none; color: var(--primary); font-weight: 800; font-size: 1rem; text-align: center; outline: none; width: 100px;}
+        .col-header input[type="checkbox"] { accent-color: var(--primary); width:16px; height:16px; cursor:pointer;}
+
+        /* Internal Kanban Folders (Groups) */
+        .kanban-folder-group { margin-bottom: 15px; background: rgba(0,0,0,0.1); border-radius: 16px; padding: 10px; border: 1px dashed var(--outline);}
+        .kanban-folder-title { margin: 0 0 10px 0; font-size: 0.85rem; color: var(--primary); opacity: 0.8; font-weight: 700; display:flex; align-items:center; gap:5px;}
+
+        .artist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding-bottom: 10px; }
+        
+        /* Card Colors (רקע מלא כפי שביקשת) */
+        .artist-card { background: var(--surface-variant); border-radius: 16px; padding: 12px 10px; text-align: center; border: 1px solid var(--outline); transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease; cursor: pointer; position: relative; user-select: none;}
+        .artist-card.signed { background-color: var(--status-signed); border-color: rgba(76, 175, 80, 0.4); }
+        .artist-card.failed { background-color: var(--status-failed); border-color: rgba(255, 193, 7, 0.4); }
+        .artist-card.rejected { background-color: var(--status-rejected); border-color: rgba(244, 67, 54, 0.4); }
+        .artist-card:hover { transform: translateY(-3px); border-color: var(--primary); box-shadow: 0 5px 15px rgba(0,0,0,0.2);}
+        .artist-card.selected { border: 2px solid var(--primary); box-shadow: 0 0 10px rgba(41,197,208,0.5); transform: scale(1.02); }
+
+        .odoo-badge { position: absolute; top: -5px; left: -5px; background: #4CAF50; color: #fff; font-size: 0.6rem; padding: 2px 6px; border-radius: 8px; font-weight: 800; z-index: 5; border: 2px solid var(--surface-variant);}
+        .card-initials { width: 38px; height: 38px; margin: 0 auto 8px; background: var(--primary); color: #000; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: 900; font-size: 1rem; }
+        .card-name { font-weight: 700; font-size: 0.95rem; display: block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom: 4px;}
+        .card-meta { font-size: 0.7rem; opacity: 0.7; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom:2px;}
+        .card-tag { background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 6px; font-size: 0.65rem; font-weight: 700; display: inline-block; margin-top: 4px; border:1px solid rgba(255,255,255,0.1);}
+
+        /* List View (Windows Style) */
+        .list-view { display: none; flex-direction: column; width: 100%; height: 100%; background: var(--surface); border-radius: 20px; border: 1px solid var(--outline); overflow: hidden; }
+        .list-table-wrapper { overflow-y: auto; flex-grow: 1; }
+        .list-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: right; }
+        .list-table th { position: sticky; top: 0; background: var(--surface-variant); padding: 12px; font-weight: 800; border-bottom: 2px solid var(--outline); z-index: 5; color: var(--primary); cursor: pointer;}
+        .list-table th:hover { background: rgba(41,197,208,0.1); }
+        .list-table td { padding: 10px 12px; border-bottom: 1px solid var(--outline); cursor: pointer; transition: background 0.1s;}
+        .list-table tr:hover td { background: rgba(255,255,255,0.03); }
+        .list-table tr.selected td { background: rgba(41,197,208,0.1); }
+        .list-table tr.active-edit td { background: var(--surface-variant); border-right: 3px solid var(--primary); }
+
+        /* Quick Edit Panel */
+        .quick-edit-panel { display: none; width: 320px; background: var(--surface-variant); border-right: 1px solid var(--outline); padding: 20px; flex-direction: column; overflow-y: auto; flex-shrink: 0; border-radius: 20px;}
+        .quick-edit-panel.active { display: flex; animation: slideInLeft 0.3s ease; }
+
+        /* Forms, Buttons, Inputs */
+        .input-field { width: 100%; padding: 12px 15px; border-radius: 12px; border: 1px solid var(--outline); background: var(--bg); color: var(--on-surface); font-family: inherit; margin-bottom: 10px; outline: none; font-size:0.9rem; transition: border-color 0.2s;}
+        .input-field:focus { border-color: var(--primary); }
+        .btn { padding: 12px 18px; border-radius: 100px; border: none; cursor: pointer; font-weight: 800; font-family: inherit; transition: transform 0.15s; font-size:0.9rem; display:flex; justify-content:center; align-items:center; gap:8px;}
+        .btn:active { transform: scale(0.96); }
+        .btn-primary { background: var(--primary); color: #000; width: 100%; box-shadow: 0 4px 15px rgba(41,197,208,0.3); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(41,197,208,0.5);}
+        .btn-ghost { background: transparent; color: var(--on-surface); border: 1px solid var(--outline); }
+        .btn-ghost:hover { background: var(--surface-variant); }
+        .checkbox-lbl { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem; margin-bottom:10px; }
+        .checkbox-lbl input { accent-color: var(--primary); width: 16px; height: 16px; }
+
+        /* Modals & Menus */
+        .drawer { position: fixed; left: 0; top: 0; bottom: 0; width: 380px; max-width: 100%; background: var(--surface); z-index: 20000; transform: translateX(-100%); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 20px; box-shadow: 10px 0 50px rgba(0,0,0,0.5); border-right: 1px solid var(--outline); display: flex; flex-direction: column; overflow-y:auto;}
+        .drawer.open { transform: translateX(0); }
+        .modal-overlay { display:none; position:fixed; inset:0; z-index:15000; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); justify-content:center; align-items:center; padding:10px; overflow-y:auto;}
+        
+        .fab { position: fixed; bottom: 25px; right: 25px; width: 60px; height: 60px; border-radius: 20px; background: var(--primary); color: #000; font-size: 30px; border: none; cursor: pointer; z-index: 5000; box-shadow: 0 8px 25px rgba(41,197,208,0.4); transition: transform 0.2s; display: flex; justify-content: center; align-items: center; }
+        .fab:hover { transform: scale(1.05) rotate(90deg); border-radius: 50%; }
+
+        /* Context Menu */
+        .context-menu { display: none; position: absolute; background: var(--surface); border: 1px solid var(--primary); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 30000; min-width: 180px; overflow: hidden; animation: slideDown 0.2s ease;}
+        .context-menu div { padding: 12px 15px; font-size: 0.85rem; font-weight: 600; cursor: pointer; border-bottom: 1px solid var(--outline); display:flex; align-items:center; gap:8px; transition: background 0.15s;}
+        .context-menu div:last-child { border-bottom: none; }
+        .context-menu div:hover { background: var(--surface-variant); color: var(--primary); padding-right: 20px; }
+
+        @media (max-width: 900px) {
+            .sidebar { display: none; position: fixed; right: 0; top: 0; bottom: 0; z-index: 10000; width: 250px; }
+            .sidebar.mobile-open { display: flex; animation: slideInRight 0.3s ease; }
+            .kanban-view { flex-direction: column; height: auto; overflow-y: auto;}
+            .kanban-column { min-height: 400px; flex: none; margin-bottom: 15px; }
+            .top-bar { flex-direction: column; align-items: stretch; }
+            .quick-edit-panel { display: none !important; }
+            header { flex-wrap: wrap; }
+        }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideInLeft { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="dark-mode" onclick="closeAllMenus(event)">
+
+    <div id="splashScreen">
+        <img src="splash.gif" style="width: 150px; margin-bottom: 30px;" onerror="this.style.display='none'">
+        <div class="login-card" id="loginCard" style="display:none;">
+            <h2 style="margin-bottom: 20px; margin-top:0; font-weight: 900;">JUSIC 2026 CRM</h2>
+            <button class="btn btn-primary" onclick="loginGuest(true)">כניסה כמשתמש שמור</button>
+            <div style="margin: 15px 0; opacity: 0.5; font-size: 0.8rem;">או התחברות חדשה</div>
+            <input type="text" id="guestName" placeholder="שם מלא" class="input-field" style="text-align: center;">
+            <input type="password" id="passCode" placeholder="קוד צוות (jusic)" class="input-field" style="text-align: center;">
+            <button class="btn btn-ghost" style="width: 100%;" onclick="loginGuest()">התחבר למערכת</button>
+        </div>
+    </div>
+
+    <header>
+        <div style="display:flex; align-items:center; gap:15px;">
+            <button class="icon-btn" onclick="toggleMobileSidebar()" style="display:none;" id="mobileSidebarBtn">🗂️</button>
+            <img src="LOGO.png" class="logo-img" onclick="location.reload()" onerror="this.style.display='none'">
+            <h1 class="main-title">החתמות PRO</h1>
+        </div>
+        <div class="header-actions">
+            <button class="icon-btn" onclick="toggleViewMode()" title="החלף תצוגה (רשימה/כרטיסיות)">🖥️</button>
+            <button class="icon-btn" onclick="closeModals(); document.getElementById('modalExport').style.display='flex';" title="ייצוא מתקדם">📥</button>
+            <button class="icon-btn" onclick="toggleTheme()" title="החלף עיצוב">🌓</button>
+            <button class="icon-btn" onclick="checkAdminAccess()" title="הגדרות וגיבויים">⚙️</button>
+            <div class="user-pill" onclick="toggleDrawer('profileDrawer', true)">
+                <img id="navUserAvatar" style="width:26px; height:26px; border-radius:50%; background:var(--primary);">
+            </div>
+        </div>
+    </header>
+
+    <div class="progress-container" id="progressBarContainer">
+        <div class="progress-bar green" id="progSigned" style="width:0%;"></div>
+        <div class="progress-bar yellow" id="progFailed" style="width:0%;"></div>
+        <div class="progress-bar red" id="progRejected" style="width:0%;"></div>
+    </div>
+
+    <div class="top-bar">
+        <div class="filters-group">
+            <input type="text" id="searchInput" class="search-input" placeholder="חיפוש חופשי..." oninput="debounceSearch(this.value)">
+            <select id="filterHandler" class="filter-select" onchange="window.state.filters.handler = this.value; renderApp();">
+                <option value="all">כל המטפלים</option>
+            </select>
+            <button id="bulkActionBtn" class="btn-primary" style="padding:8px 15px; border-radius:100px; display:none; font-size:0.8rem; width:auto;" onclick="openBulkEditModal()">✏️ פעולה מרוכזת (<span id="bulkCount">0</span>)</button>
+        </div>
+        <div class="stats-group">
+            <div class="stat-btn active" onclick="toggleStatusFilter('all')" id="stat-all">כולם (0)</div>
+            <div class="stat-btn" onclick="toggleStatusFilter('signed')" id="stat-signed">✅ חתומים (0)</div>
+            <div class="stat-btn" onclick="toggleStatusFilter('failed')" id="stat-failed">⚠️ בבדיקה (0)</div>
+            <div class="stat-btn" onclick="toggleStatusFilter('rejected')" id="stat-rejected">❌ מסורבים (0)</div>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="sidebar" id="sidebar">
+            <h4 style="margin-top:0; color:var(--on-surface-variant); font-size:0.8rem;">תיקיות וחלוקה</h4>
+            <div class="folder-item active" id="folder-all" onclick="selectFolder('all')" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropOnFolder(event, 'all')">
+                <span>📁 כל האמנים</span> <span class="folder-count" id="count-folder-all">0</span>
+            </div>
+            <div id="foldersList"></div>
+            <button class="btn-ghost" style="margin-top:10px; font-size:0.8rem; padding:8px;" onclick="createNewFolder()">+ תיקייה חדשה</button>
+            
+            <h4 style="margin-top:20px; color:var(--on-surface-variant); font-size:0.8rem;">סינון לפי תגית / ז'אנר</h4>
+            <select id="filterTag" class="input-field" style="margin-bottom:15px; font-size:0.85rem; padding:8px;" onchange="window.state.filters.tag = this.value; renderApp();">
+                <option value="all">כל התגיות</option>
+            </select>
+
+            <div class="folder-item trash" id="folder-trash" onclick="selectFolder('trash')" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropOnTrash(event)">
+                <span>🗑️ סל מחזור</span> <span class="folder-count" id="count-folder-trash">0</span>
+            </div>
+        </div>
+
+        <div class="content-area">
+            
+            <div class="kanban-view" id="kanbanView">
+                </div>
+
+            <div class="list-view" id="listView">
+                <div class="list-table-wrapper">
+                    <table class="list-table">
+                        <thead>
+                            <tr>
+                                <th style="width:40px;"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)"></th>
+                                <th onclick="sortList('name')">שם האמן ↕</th>
+                                <th onclick="sortList('tag')">תגית / ז'אנר ↕</th>
+                                <th onclick="sortList('category')">עמודה ↕</th>
+                                <th onclick="sortList('status')">סטטוס ↕</th>
+                                <th onclick="sortList('handler')">מטפל ↕</th>
+                                <th>Odoo</th>
+                                <th>אימייל</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="quick-edit-panel" id="quickEditPanel">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h3 style="margin:0; font-weight:800; color:var(--primary);" id="qeName">בחר אמן...</h3>
+                    <button class="icon-btn" style="width:30px; height:30px; font-size:1rem;" onclick="closeQuickEdit()">X</button>
+                </div>
+                <input type="hidden" id="qeId">
+                
+                <label style="font-size:0.8rem; font-weight:700;">מייל (Enter לשמירה ולבא בתור)</label>
+                <div style="display:flex; gap:5px; margin-bottom:10px;">
+                    <input type="email" id="qeEmail" class="input-field" style="margin:0; padding:8px; direction:ltr; text-align:left;" onkeydown="if(event.key==='Enter') saveQuickEditAndNext()">
+                    <button class="btn-primary" style="padding:0 12px; border-radius:12px; font-weight:bold;" onclick="document.getElementById('qeEmail').value += '@gmail.com'; document.getElementById('qeEmail').focus();">@</button>
+                </div>
+
+                <label style="font-size:0.8rem; font-weight:700;">תיוג אמן (ז'אנר)</label>
+                <select id="qeTag" class="input-field" style="padding:8px;" onchange="saveQuickEdit()"></select>
+
+                <label style="font-size:0.8rem; font-weight:700;">גורם מטפל</label>
+                <input type="text" id="qeHandler" class="input-field" style="padding:8px;" onkeydown="if(event.key==='Enter') saveQuickEditAndNext()">
+
+                <label style="font-size:0.8rem; font-weight:700;">סטטוס טיפול</label>
+                <select id="qeStatus" class="input-field" style="padding:8px;" onchange="saveQuickEdit()">
+                    <option value="none">לא חתומים</option>
+                    <option value="signed">✅ חתומים</option>
+                    <option value="failed">⚠️ תקוע/בבדיקה</option>
+                    <option value="rejected">❌ מסורבים</option>
+                </select>
+
+                <label class="checkbox-lbl" style="background:rgba(76,175,80,0.1); padding:10px; border-radius:12px; border:1px solid rgba(76,175,80,0.3);">
+                    <input type="checkbox" id="qeOdoo" onchange="saveQuickEdit()"> <span style="color:#4CAF50; font-weight:700;">חומרים מאושרים ב-Odoo</span>
+                </label>
+
+                <label style="font-size:0.8rem; font-weight:700;">הערות ועדכונים</label>
+                <textarea id="qeNotes" class="input-field" style="flex-grow:1; resize:none; padding:8px;" onchange="saveQuickEdit()"></textarea>
+                
+                <button class="btn-primary" onclick="saveQuickEditAndNext()">שמור ועבור לבא ⬇️</button>
+            </div>
+
+        </div>
+    </div>
+
+    <button class="fab" onclick="closeModals(); document.getElementById('modalAddMenu').style.display='flex';">+</button>
+
+    <div id="contextMenu" class="context-menu">
+        <div onclick="cmAction('edit')">✏️ עריכה מלאה</div>
+        <div onclick="cmAction('toggleOdoo')" id="cmOdooText">✓ אישור Odoo</div>
+        <div onclick="cmAction('assignMe')">🙋‍♂️ הקצה טיפול אליי</div>
+        <div onclick="cmAction('delete')" style="color:#ff5252;" id="cmDelText">🗑️ העבר לסל מחזור</div>
+    </div>
+
+    <div id="folderContextMenu" class="context-menu">
+        <div onclick="renameActiveFolder()">✏️ שנה שם תיקייה</div>
+        <div onclick="deleteActiveFolder()" style="color:#ff5252;">🗑️ מחק תיקייה</div>
+    </div>
+
+    <div id="modalAddMenu" class="modal-overlay">
+        <div class="login-card" style="animation: slideUp 0.3s ease-out;">
+            <h3 style="margin-top:0;">הוספת נתונים</h3>
+            <button class="btn btn-primary" style="margin-bottom:15px; padding:15px;" onclick="closeModals(); openArtistModal();">👤 הוספת אמן בודד</button>
+            <button class="btn btn-ghost" style="width:100%; margin-bottom:15px; border-color:var(--primary); color:var(--primary); padding:15px;" onclick="closeModals(); document.getElementById('modalCsvUpload').style.display='flex';">📄 העלאת אקסל (CSV)</button>
+            <button class="btn-ghost" style="color:#ff5252; border:none; width:100%;" onclick="closeModals()">ביטול</button>
+        </div>
+    </div>
+
+    <div id="modalCsvUpload" class="modal-overlay">
+        <div class="login-card" style="width:480px; text-align:right;">
+            <h3 style="margin-top:0;">ייבוא רשימה (CSV)</h3>
+            <div style="background:var(--surface-variant); padding:15px; border-radius:16px; font-size:0.85rem; margin-bottom:15px; line-height:1.6; border:1px solid var(--outline);">
+                <strong style="color:var(--primary);">סדר עמודות נדרש לקובץ (משמאל לימין):</strong><br>
+                1. שם, 2. קטגוריה (popular/rest/indie), 3. סטטוס, 4. מטפל, 5. אימייל, 6. מאושר Odoo, 7. הערות
+            </div>
+            <input type="file" id="csvFileInput" accept=".csv" class="input-field" style="padding:10px;">
+            <div style="display:flex; gap:10px;">
+                <button class="btn-ghost" style="flex:1;" onclick="closeModals()">ביטול</button>
+                <button class="btn btn-primary" style="flex:1;" onclick="parseCsvFile()">ייבא נתונים</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalExport" class="modal-overlay">
+        <div class="login-card" style="width:400px; text-align:right;">
+            <h3 style="margin-top:0;">ייצוא נתונים 📥</h3>
+            <label style="font-weight:700; font-size:0.85rem;">איזה מידע לייצא?</label>
+            <select id="exportScope" class="input-field">
+                <option value="all">את כל מסד הנתונים</option>
+                <option value="filtered">רק את האמנים שמוצגים כעת במסך</option>
+                <option value="selected">רק אמנים שסומנו ב-V</option>
+            </select>
+            
+            <label style="font-weight:700; font-size:0.85rem; margin-top:10px; display:block;">בחר עמודות לייצוא:</label>
+            <div style="background:var(--surface-variant); padding:10px; border-radius:12px; margin-bottom:15px; display:grid; grid-template-columns:1fr 1fr; gap:5px;">
+                <label class="checkbox-lbl"><input type="checkbox" class="export-col" value="name" checked disabled> שם האמן</label>
+                <label class="checkbox-lbl"><input type="checkbox" class="export-col" value="email" checked> אימייל</label>
+                <label class="checkbox-lbl"><input type="checkbox" class="export-col" value="tag" checked> תגית</label>
+                <label class="checkbox-lbl"><input type="checkbox" class="export-col" value="status" checked> סטטוס</label>
+                <label class="checkbox-lbl"><input type="checkbox" class="export-col" value="category" checked> עמודה</label>
+                <label class="checkbox-lbl"><input type="checkbox" class="export-col" value="handler" checked> מטפל</label>
+                <label class="checkbox-lbl"><input type="checkbox" class="export-col" value="odooApproved" checked> אישור Odoo</label>
+                <label class="checkbox-lbl"><input type="checkbox" class="export-col" value="notes"> הערות</label>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+                <button class="btn-ghost" style="flex:1;" onclick="closeModals()">ביטול</button>
+                <button class="btn btn-primary" style="flex:1;" onclick="executeExport()">הורד קובץ CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalArtist" class="modal-overlay">
+        <div class="login-card" style="width:450px; text-align:right;">
+            <h3 style="margin-top:0;" id="artistModalTitle">עריכת אמן</h3>
+            <input type="hidden" id="editArtistId">
+            <input type="text" id="editArtistName" class="input-field" placeholder="שם האמן (חובה)">
+            <input type="email" id="editArtistEmail" class="input-field" placeholder="אימייל" style="direction:ltr; text-align:left;">
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                    <label style="font-size:0.75rem; font-weight:bold;">מטפל</label>
+                    <input type="text" id="editArtistHandler" class="input-field" placeholder="שם מטפל...">
+                </div>
+                <div>
+                    <label style="font-size:0.75rem; font-weight:bold;">תיוג אמן (ז'אנר)</label>
+                    <select id="editArtistTagFull" class="input-field"></select>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                    <label style="font-size:0.75rem; font-weight:bold;">סטטוס טיפול</label>
+                    <select id="editArtistStatus" class="input-field">
+                        <option value="none">לא חתומים</option>
+                        <option value="signed">✅ חתומים</option>
+                        <option value="failed">⚠️ בבדיקה</option>
+                        <option value="rejected">❌ מסורבים</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size:0.75rem; font-weight:bold;">עמודה ראשית</label>
+                    <select id="editArtistCategory" class="input-field"></select>
+                </div>
+            </div>
+
+            <label class="checkbox-lbl" style="background:rgba(76,175,80,0.1); padding:10px; border-radius:12px;"><input type="checkbox" id="editArtistOdoo"> <span style="color:#4CAF50; font-weight:700;">חומרים מאושרים ב-Odoo</span></label>
+            <textarea id="editArtistNotes" class="input-field" style="min-height:80px;" placeholder="הערות ועדכונים..."></textarea>
+            
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn-ghost" style="color:#ff5252; border-color:rgba(255,82,82,0.3);" onclick="hardDeleteArtistFromModal()">מחק סופית</button>
+                <button class="btn-ghost" style="flex:1;" onclick="closeModals()">ביטול</button>
+                <button class="btn btn-primary" style="flex:1;" onclick="saveArtistFull()">שמור</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalBulk" class="modal-overlay">
+        <div class="login-card" style="width:400px; text-align:right;">
+            <h3 style="margin-top:0;">עריכה מרוכזת (<span id="bulkModalCount">0</span> אמנים)</h3>
+            <p style="font-size:0.8rem; margin-bottom:15px;">שדות שישארו ריקים לא ישתנו.</p>
+            <select id="bulkStatus" class="input-field"><option value="">-- ללא שינוי סטטוס --</option><option value="none">לא חתומים</option><option value="signed">✅ חתומים</option><option value="failed">⚠️ בבדיקה</option><option value="rejected">❌ מסורבים</option></select>
+            <select id="bulkTag" class="input-field"></select>
+            <select id="bulkCategory" class="input-field"></select>
+            <input type="text" id="bulkHandler" class="input-field" placeholder="שנה גורם מטפל לכולם...">
+            <select id="bulkFolder" class="input-field"></select>
+            <select id="bulkOdoo" class="input-field"><option value="">-- ללא שינוי Odoo --</option><option value="true">✓ אשר את כולם</option><option value="false">✗ בטל אישור לכולם</option></select>
+            
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button class="btn-ghost" style="flex:1;" onclick="closeModals()">ביטול</button>
+                <button class="btn btn-primary" style="flex:1;" onclick="executeBulkEdit()">החל שינויים</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="adminDrawer" class="drawer">
+        <h3 style="margin-top:0; border-bottom:1px solid var(--outline); padding-bottom:10px;">ניהול והגדרות ⚙️</h3>
+        
+        <h4>תגיות אמנים (ז'אנרים)</h4>
+        <textarea id="adminTagsInput" class="input-field" style="min-height:80px; font-size:0.8rem;" placeholder="הכנס תגיות מופרדות בפסיק..."></textarea>
+        <button class="btn-ghost" style="width:100%; margin-bottom:15px; font-size:0.8rem;" onclick="saveTagsSettings()">שמור תגיות</button>
+
+        <h4>מערכת נתונים</h4>
+        <button class="btn-ghost" style="width:100%; margin-bottom:10px; border-color:var(--primary); color:var(--primary);" onclick="loadFromDataJs()">📥 שאב נתונים מקובץ data.js</button>
+        <button class="btn-ghost" style="width:100%; margin-bottom:10px;" onclick="takeManualSnapshot()">📸 יצירת גיבוי מערכת עכשיו</button>
+        <button class="btn-ghost" style="width:100%; margin-bottom:15px;" onclick="emptyTrash()">🗑️ רוקן סל מחזור</button>
+        
+        <h4>מכונת זמן (גיבויים אוטומטיים)</h4>
+        <div id="snapshotsList" style="max-height:120px; overflow-y:auto; font-size:0.8rem; margin-bottom:15px;"></div>
+        
+        <h4>יומן פעולות</h4>
+        <div id="auditLog" style="flex-grow:1; overflow-y:auto; font-size:0.8rem;"></div>
+        <button class="btn-ghost" style="margin-top:15px;" onclick="toggleDrawer('adminDrawer', false)">סגור</button>
+    </div>
+
+    <div id="profileDrawer" class="drawer">
+        <h3 style="margin-top:0;">הפרופיל שלי</h3>
+        <input type="text" id="profName" class="input-field">
+        <button class="btn btn-primary" onclick="updateProfile()">שמור שינויים</button>
+        <div style="margin-top:20px; background:var(--surface-variant); padding:15px; border-radius:12px;">
+            <p style="font-size:0.8rem; margin-top:0;">קוד סנכרון התחברות למכשיר אחר:</p>
+            <button class="btn-ghost" style="width:100%;" onclick="generateSync()">הפק קוד סנכרון</button>
+            <h2 id="syncCodeShow" style="text-align:center; letter-spacing:5px; color:var(--primary); display:none;"></h2>
+        </div>
+        <button class="btn-ghost" style="margin-top:auto; color:#ff5252;" onclick="logout()">התנתק מהמערכת</button>
+        <button class="btn-ghost" style="margin-top:10px;" onclick="toggleDrawer('profileDrawer', false)">סגור</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getDatabase, ref, set, get, onValue, push, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+
+        const fbConfig = { apiKey: "AIzaSyBXTUdqZqX8vhDXqtdiN5oMARW_1iGPeQY", authDomain: "jusic-1e773.firebaseapp.com", projectId: "jusic-1e773", storageBucket: "jusic-1e773.firebasestorage.app", messagingSenderId: "42814661118", appId: "1:42814661118:web:153d5f1d82ab67bb90e0af" };
+        const app = initializeApp(fbConfig); const db = getDatabase(app); const auth = getAuth(app); const provider = new GoogleAuthProvider();
+
+        const defaultTags = ["חזנות", "חסידי שורשי", "חסידי ישיבתי", "חסידי מודרני", "אלטרנטיבי חסידי", "אלטרנטיבי/ישראלי", "מזרחי > חסידי", "מזרחי/ים תיכוני", "פיוטים"];
+
+        // --- STATE ---
+        window.state = {
+            artists: [], folders: [], columns: { popular: "פופולרי", rest: "השאר", indie: "לא רלוונטי" }, colOrder: ['popular', 'rest', 'indie'], tags: [], me: null,
+            viewMode: 'kanban', filters: { search: '', status: 'all', handler: 'all', folder: 'all', tag: 'all' }, sort: { by: 'name', asc: true },
+            selectedIds: new Set(), cmArtistId: null, cmFolderId: null, activeEditId: null 
+        };
+
+        if (localStorage.getItem('jusic_theme') === 'light') document.body.classList.add('light-mode');
+        if (localStorage.getItem('jusic_view')) window.state.viewMode = localStorage.getItem('jusic_view');
+
+        const statNames = { 'none': 'לא חתומים', 'signed': 'חתומים', 'failed': 'בבדיקה', 'rejected': 'מסורבים' };
+        window.isValidJusicCode = (c) => c && ['j','u','s','i','c'].every(char => c.toLowerCase().includes(char));
+
+        // --- INIT & AUTH ---
+        onAuthStateChanged(auth, (user) => {
+            const gName = localStorage.getItem('jusic_guest_name');
+            if (user) { initApp(user.displayName, user.photoURL); } 
+            else if (gName) { initApp(gName, `https://ui-avatars.com/api/?name=${gName}&background=29C5D0&color=000`); } 
+            else { setTimeout(() => { document.getElementById('loginCard').style.display = "block"; }, 800); }
+        });
+
+        window.loginGuest = (saved = false) => {
+            let n = localStorage.getItem('jusic_guest_name');
+            if(!saved) {
+                n = document.getElementById('guestName').value.trim(); const c = document.getElementById('passCode').value.toLowerCase();
+                if(!n) return alert("הזן שם"); if(!window.isValidJusicCode(c)) return alert("קוד שגוי");
+                localStorage.setItem('jusic_guest_name', n);
+            }
+            if(n) initApp(n, `https://ui-avatars.com/api/?name=${n}&background=29C5D0&color=000`);
+        };
+
+        function initApp(name, photo) {
+            window.state.me = { name, photo };
+            document.getElementById('splashScreen').style.opacity = '0'; setTimeout(()=>document.getElementById('splashScreen').style.display='none', 500);
+            document.getElementById('navUserAvatar').src = photo; document.getElementById('profName').value = name;
+            document.getElementById('kanbanView').style.display = window.state.viewMode === 'kanban' ? 'flex' : 'none';
+            document.getElementById('listView').style.display = window.state.viewMode === 'list' ? 'flex' : 'none';
+
+            // DB Listeners
+            onValue(ref(db, 'settings/columns'), snap => { 
+                const val = snap.val();
+                if(val) { if(val.col1) { window.state.columns = { popular: val.col1 || "פופולרי", rest: val.col2 || "השאר", indie: val.col3 || "לא רלוונטי" }; set(ref(db, 'settings/columns'), window.state.columns); } else { window.state.columns = val; } }
+                updateColumnUI(); renderApp(); 
+            });
+            onValue(ref(db, 'settings/colOrder'), snap => { if(snap.val()) { window.state.colOrder = snap.val(); renderApp(); } });
+            onValue(ref(db, 'settings/tags'), snap => { window.state.tags = snap.val() || defaultTags; updateTagsUI(); renderApp(); });
+            onValue(ref(db, 'folders'), snap => { window.state.folders = snap.val() ? Object.values(snap.val()) : []; renderFolders(); renderApp(); });
+            onValue(ref(db, 'artists'), snap => { window.state.artists = snap.val() ? Object.values(snap.val()) : []; renderApp(); });
+            onValue(query(ref(db, 'audit_log'), limitToLast(20)), snap => renderLogs(snap.val()));
+            onValue(query(ref(db, 'snapshots'), limitToLast(5)), snap => renderSnapshots(snap.val()));
+        }
+
+        // --- RENDER ENGINE ---
+        let searchTimeout;
+        window.debounceSearch = (val) => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => { window.state.filters.search = val.toLowerCase(); renderApp(); }, 300); };
+        window.toggleStatusFilter = (status) => { if(window.state.filters.status === status) status = 'all'; window.state.filters.status = status; document.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active')); document.getElementById(`stat-${status}`).classList.add('active'); window.state.selectedIds.clear(); renderApp(); };
+        window.selectFolder = (id) => { window.state.filters.folder = id; document.querySelectorAll('.folder-item').forEach(f => f.classList.remove('active')); document.getElementById(`folder-${id}`).classList.add('active'); window.state.selectedIds.clear(); if(window.innerWidth <= 900) toggleMobileSidebar(); renderApp(); };
+        
+        window.toggleSelectAll = (checked) => { if(checked) { const visible = getVisibleArtists(); window.state.selectedIds = new Set(visible.map(a => a.id)); } else window.state.selectedIds.clear(); renderApp(); };
+        window.toggleSelect = (ev, id) => { ev.stopPropagation(); if(window.state.selectedIds.has(id)) window.state.selectedIds.delete(id); else window.state.selectedIds.add(id); renderApp(); };
+        window.selectAllInCol = (colKey, checked) => { const visible = getVisibleArtists().filter(a => a.category === colKey); visible.forEach(a => checked ? window.state.selectedIds.add(a.id) : window.state.selectedIds.delete(a.id)); renderApp(); };
+
+        function getVisibleArtists() {
+            const f = window.state.filters;
+            let filtered = window.state.artists.filter(a => {
+                if(f.folder === 'trash') return a.deleted === true; 
+                if(a.deleted) return false; 
+                if(f.status !== 'all' && a.status !== f.status) return false;
+                if(f.folder !== 'all' && a.folderId !== f.folder) return false;
+                if(f.handler !== 'all' && a.handler !== f.handler) return false;
+                if(f.tag !== 'all' && a.tag !== f.tag) return false;
+                if(f.search && !a.name.toLowerCase().includes(f.search) && !(a.handler||'').toLowerCase().includes(f.search)) return false;
+                return true;
+            });
+            filtered.sort((a,b) => { let v1 = a[window.state.sort.by] || ''; let v2 = b[window.state.sort.by] || ''; if(typeof v1 === 'string') v1 = v1.toLowerCase(); if(typeof v2 === 'string') v2 = v2.toLowerCase(); if(v1 < v2) return window.state.sort.asc ? -1 : 1; if(v1 > v2) return window.state.sort.asc ? 1 : -1; return 0; });
+            return filtered;
+        }
+        window.sortList = (col) => { if(window.state.sort.by === col) window.state.sort.asc = !window.state.sort.asc; else { window.state.sort.by = col; window.state.sort.asc = true; } renderApp(); };
+
+        window.renderApp = () => {
+            const visible = getVisibleArtists();
+            
+            let sTotal=0, sSigned=0, sFailed=0, sRej=0;
+            window.state.artists.forEach(a => { if(a.deleted) return; sTotal++; if(a.status==='signed') sSigned++; else if(a.status==='failed') sFailed++; else if(a.status==='rejected') sRej++; });
+            document.getElementById('stat-all').innerHTML = `כולם (${sTotal})`; document.getElementById('stat-signed').innerHTML = `✅ חתומים (${sSigned})`; document.getElementById('stat-failed').innerHTML = `⚠️ בבדיקה (${sFailed})`; document.getElementById('stat-rejected').innerHTML = `❌ מסורבים (${sRej})`;
+            if(sTotal>0) { document.getElementById('progSigned').style.width = `${(sSigned/sTotal)*100}%`; document.getElementById('progFailed').style.width = `${(sFailed/sTotal)*100}%`; document.getElementById('progRejected').style.width = `${(sRej/sTotal)*100}%`; } else { ['progSigned','progFailed','progRejected'].forEach(id => document.getElementById(id).style.width='0%'); }
+
+            const currH = document.getElementById('filterHandler').value; const handlers = [...new Set(window.state.artists.filter(a=>!a.deleted).map(a => a.handler).filter(x=>x))];
+            document.getElementById('filterHandler').innerHTML = '<option value="all">כל המטפלים</option>' + handlers.map(h => `<option value="${h}">${h}</option>`).join(''); document.getElementById('filterHandler').value = handlers.includes(currH) ? currH : 'all';
+
+            const bulkBtn = document.getElementById('bulkActionBtn');
+            if(window.state.selectedIds.size > 0 && window.state.filters.folder !== 'trash') { bulkBtn.style.display = 'inline-block'; document.getElementById('bulkCount').innerText = window.state.selectedIds.size; } else { bulkBtn.style.display = 'none'; }
+
+            if(window.state.viewMode === 'kanban') renderKanban(visible); else renderList(visible);
+            updateFolderCounts();
+        };
+
+        function renderKanban(artists) {
+            let html = '';
+            window.state.colOrder.forEach(colKey => {
+                const colName = window.state.columns[colKey]; if(!colName) return;
+                const colArtists = artists.filter(a => a.category === colKey);
+                const allSelected = colArtists.length > 0 && colArtists.every(a => window.state.selectedIds.has(a.id));
+
+                let colHtml = '';
+                const groups = {}; colArtists.forEach(a => { const fid = a.folderId || 'root'; if(!groups[fid]) groups[fid] = []; groups[fid].push(a); });
+
+                Object.keys(groups).sort().forEach(fid => {
+                    if(fid !== 'root') { const fname = window.state.folders.find(f=>f.id===fid)?.name || 'תיקייה'; colHtml += `<div class="kanban-folder-group"><h5 class="kanban-folder-title">📁 ${fname}</h5><div class="artist-grid">`; } else { colHtml += `<div class="artist-grid">`; }
+                    groups[fid].forEach(a => {
+                        const isSel = window.state.selectedIds.has(a.id) ? 'selected' : ''; const init = a.name.split(' ').map(n=>n[0]).join('').slice(0,2);
+                        const odoo = a.odooApproved ? `<div class="odoo-badge">✓</div>` : ''; const hndl = a.handler ? `<span class="card-meta">👤 ${a.handler}</span>` : ''; const tag = a.tag ? `<span class="card-tag">${a.tag}</span>` : '';
+                        colHtml += `<div class="artist-card ${a.status} ${isSel}" draggable="true" ondragstart="dragStart(event, '${a.id}', 'card')" onclick="openArtistModal('${a.id}')" oncontextmenu="showContextMenu(event, '${a.id}', false)">${odoo}<input type="checkbox" style="position:absolute; top:10px; left:10px; accent-color:var(--primary);" ${isSel?'checked':''} onclick="toggleSelect(event, '${a.id}')"><div class="card-initials">${init}</div><span class="card-name">${a.name}</span>${hndl} ${tag}<span class="card-meta" style="margin-top:5px;">🕒 ${a.lastUpdate||''}</span></div>`;
+                    });
+                    colHtml += `</div>`; if(fid !== 'root') colHtml += `</div>`;
+                });
+                
+                html += `<div class="kanban-column" id="kanban-col-${colKey}" draggable="true" ondragstart="dragStart(event, '${colKey}', 'col')" ondragover="allowDropCol(event)" ondrop="dropOnCol(event, '${colKey}')"><div class="col-header" ondblclick="editColumnName('${colKey}')" id="header-${colKey}"><input type="checkbox" title="בחר הכל בעמודה" ${allSelected?'checked':''} onchange="selectAllInCol('${colKey}', this.checked)"><span>${colName}</span><span style="opacity:0; width:16px;"></span></div>${colHtml}</div>`;
+            });
+            document.getElementById('kanbanView').innerHTML = html;
+        }
+
+        function renderList(artists) {
+            let html = ''; const allSel = artists.length > 0 && window.state.selectedIds.size === artists.length;
+            document.getElementById('selectAllCheckbox').checked = allSel; const isTrash = window.state.filters.folder === 'trash';
+            artists.forEach(a => {
+                const isSel = window.state.selectedIds.has(a.id) ? 'selected' : ''; const isAct = window.state.activeEditId === a.id ? 'active-edit' : '';
+                const statusIco = a.status==='signed'?'✅':a.status==='failed'?'⚠️':a.status==='rejected'?'❌':'⏳'; const colName = window.state.columns[a.category] || '--';
+                html += `<tr class="${isSel} ${isAct}" onclick="${isTrash ? '' : `openQuickEdit('${a.id}')`}" oncontextmenu="showContextMenu(event, '${a.id}', ${isTrash})"><td onclick="event.stopPropagation()"><input type="checkbox" ${isSel?'checked':''} onclick="toggleSelect(event, '${a.id}')"></td><td style="font-weight:700; color:${a.deleted?'#ff5252':''}">${a.name}</td><td><span style="background:var(--surface-variant); padding:2px 8px; border-radius:8px; font-size:0.7rem;">${a.tag||'--'}</span></td><td><span style="background:var(--surface-variant); padding:2px 8px; border-radius:8px; font-size:0.7rem;">${colName}</span></td><td>${statusIco}</td><td>${a.handler||'--'}</td><td style="color:${a.odooApproved?'#4CAF50':'var(--on-surface-variant)'}">${a.odooApproved?'✓':'✗'}</td><td style="direction:ltr; text-align:right;">${a.email||'--'}</td></tr>`;
+            });
+            document.getElementById('listTableBody').innerHTML = html;
+        }
+
+        // --- COLUMNS, FOLDERS & TAGS ---
+        function updateColumnUI() {
+            let opts = ''; let bOpts = '<option value="">-- ללא שינוי עמודה --</option>';
+            window.state.colOrder.forEach(k => { if(window.state.columns[k]) { opts += `<option value="${k}">${window.state.columns[k]}</option>`; bOpts += `<option value="${k}">${window.state.columns[k]}</option>`; } });
+            document.getElementById('editArtistCategory').innerHTML = opts; if(document.getElementById('bulkCategory')) document.getElementById('bulkCategory').innerHTML = bOpts;
+        }
+        function updateTagsUI() {
+            const tags = window.state.tags;
+            let opts = '<option value="">ללא תגית</option>' + tags.map(t=>`<option value="${t}">${t}</option>`).join('');
+            let bOpts = '<option value="">-- ללא שינוי תגית --</option>' + tags.map(t=>`<option value="${t}">${t}</option>`).join('');
+            let fOpts = '<option value="all">כל התגיות</option>' + tags.map(t=>`<option value="${t}">${t}</option>`).join('');
+            document.getElementById('editArtistTagFull').innerHTML = opts; document.getElementById('qeTag').innerHTML = opts; if(document.getElementById('bulkTag')) document.getElementById('bulkTag').innerHTML = bOpts; document.getElementById('filterTag').innerHTML = fOpts; document.getElementById('adminTagsInput').value = tags.join(', ');
+        }
+        window.saveTagsSettings = () => { const val = document.getElementById('adminTagsInput').value; const newTags = val.split(',').map(t=>t.trim()).filter(t=>t); window.state.tags = newTags; set(ref(db, 'settings/tags'), newTags); alert("התגיות נשמרו."); };
+
+        window.editColumnName = (colKey) => { const header = document.getElementById(`header-${colKey}`); const current = window.state.columns[colKey]; header.innerHTML = `<input type="text" id="input-${colKey}" value="${current}" onblur="saveColumnName('${colKey}')" onkeydown="if(event.key==='Enter') saveColumnName('${colKey}')" onclick="event.stopPropagation()">`; document.getElementById(`input-${colKey}`).focus(); document.getElementById(`input-${colKey}`).select(); };
+        window.saveColumnName = (colKey) => { const val = document.getElementById(`input-${colKey}`).value.trim(); if(val) window.state.columns[colKey] = val; set(ref(db, 'settings/columns'), window.state.columns); syncDB(`שינה שם עמודה ל: ${val}`); };
+
+        window.createNewFolder = () => { const name = prompt("שם התיקייה החדשה:"); if(!name) return; const id = 'f_' + Date.now(); window.state.folders.push({id, name}); set(ref(db, 'folders'), window.state.folders); };
+        function renderFolders() {
+            let html = ''; let opts = '<option value="">-- ללא שינוי תיקייה --</option><option value="all">📁 הסר מתיקייה</option>';
+            window.state.folders.forEach(f => { html += `<div class="folder-item ${window.state.filters.folder===f.id?'active':''}" id="folder-${f.id}" onclick="selectFolder('${f.id}')" oncontextmenu="showFolderMenu(event, '${f.id}')" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropOnFolder(event, '${f.id}')"><span>📁 ${f.name}</span> <span class="folder-count" id="count-folder-${f.id}">0</span></div>`; opts += `<option value="${f.id}">${f.name}</option>`; });
+            document.getElementById('foldersList').innerHTML = html; if(document.getElementById('bulkFolder')) document.getElementById('bulkFolder').innerHTML = opts; updateFolderCounts();
+        }
+        function updateFolderCounts() {
+            const counts = { all: 0, trash: 0 };
+            window.state.artists.forEach(a => { if(a.deleted) counts.trash++; else { counts.all++; if(a.folderId) counts[a.folderId] = (counts[a.folderId]||0)+1; } });
+            document.getElementById('count-folder-all').innerText = counts.all; document.getElementById('count-folder-trash').innerText = counts.trash;
+            window.state.folders.forEach(f => { const el = document.getElementById(`count-folder-${f.id}`); if(el) el.innerText = counts[f.id] || 0; });
+        }
+
+        window.showFolderMenu = (ev, id) => { ev.preventDefault(); ev.stopPropagation(); window.state.cmFolderId = id; const m = document.getElementById('folderContextMenu'); m.style.display = 'block'; m.style.left = ev.pageX + 'px'; m.style.top = ev.pageY + 'px'; };
+        window.renameActiveFolder = () => { const id = window.state.cmFolderId; const idx = window.state.folders.findIndex(f=>f.id===id); if(idx===-1) return; const n = prompt("שם חדש:", window.state.folders[idx].name); if(n) { window.state.folders[idx].name = n; set(ref(db, 'folders'), window.state.folders); } document.getElementById('folderContextMenu').style.display='none'; };
+        window.deleteActiveFolder = () => { const id = window.state.cmFolderId; if(confirm("למחוק תיקייה? האמנים יחזרו ל'כל האמנים'.")) { window.takeSnapshot('מחיקת תיקייה'); window.state.artists.forEach(a => { if(a.folderId === id) a.folderId = null; }); window.state.folders = window.state.folders.filter(f=>f.id!==id); set(ref(db, 'folders'), window.state.folders); syncDB("מחיקת תיקייה"); if(window.state.filters.folder === id) selectFolder('all'); } document.getElementById('folderContextMenu').style.display='none'; };
+
+        // --- DRAG & DROP ---
+        window.dragStart = (ev, id, type) => { ev.dataTransfer.setData("id", id); ev.dataTransfer.setData("type", type); };
+        window.allowDropCol = (ev) => { ev.preventDefault(); const t = ev.dataTransfer.getData("type"); if(t === 'col' || t === 'card') ev.currentTarget.classList.add('drag-over'); };
+        window.dropOnCol = (ev, newCat) => {
+            ev.preventDefault(); document.querySelectorAll('.kanban-column').forEach(c=>c.classList.remove('drag-over'));
+            const type = ev.dataTransfer.getData("type"); const id = ev.dataTransfer.getData("id");
+            if(type === 'col') { if(id !== newCat) { const fromIdx = window.state.colOrder.indexOf(id); const toIdx = window.state.colOrder.indexOf(newCat); window.state.colOrder.splice(fromIdx, 1); window.state.colOrder.splice(toIdx, 0, id); set(ref(db, 'settings/colOrder'), window.state.colOrder); renderApp(); } } 
+            else if(type === 'card') { const idx = window.state.artists.findIndex(a => a.id == id); if(idx !== -1 && window.state.artists[idx].category !== newCat) { window.takeSnapshot('גרירת כרטיס'); window.state.artists[idx].category = newCat; window.state.artists[idx].lastUpdate = new Date().toLocaleDateString('he-IL'); syncDB(`העביר אמן ל: ${window.state.columns[newCat]}`); } }
+        };
+        window.dropOnFolder = (ev, folderId) => { ev.preventDefault(); ev.currentTarget.classList.remove('drag-over'); const type = ev.dataTransfer.getData("type"); if(type!=='card') return; const id = ev.dataTransfer.getData("id"); const idx = window.state.artists.findIndex(a => a.id == id); if(idx !== -1 && window.state.artists[idx].folderId !== folderId) { window.state.artists[idx].folderId = folderId === 'all' ? null : folderId; syncDB(`שייך אמן לתיקייה`); } };
+        window.dropOnTrash = (ev) => { ev.preventDefault(); ev.currentTarget.classList.remove('drag-over'); const type = ev.dataTransfer.getData("type"); if(type!=='card') return; const id = ev.dataTransfer.getData("id"); const idx = window.state.artists.findIndex(a => a.id == id); if(idx !== -1 && !window.state.artists[idx].deleted) { window.takeSnapshot('העברה לפח'); window.state.artists[idx].deleted = true; syncDB(`העביר לסל מחזור: ${window.state.artists[idx].name}`); } };
+
+        // --- QUICK EDIT ---
+        window.openQuickEdit = (id) => { window.state.activeEditId = id; const a = window.state.artists.find(x => x.id === id); if(!a) return; document.getElementById('qeName').innerText = a.name; document.getElementById('qeId').value = a.id; document.getElementById('qeEmail').value = a.email || ''; document.getElementById('qeHandler').value = a.handler || ''; document.getElementById('qeStatus').value = a.status || 'none'; document.getElementById('qeTag').value = a.tag || ''; document.getElementById('qeOdoo').checked = a.odooApproved || false; document.getElementById('qeNotes').value = a.notes || ''; document.getElementById('quickEditPanel').classList.add('active'); renderApp(); document.getElementById('qeEmail').focus(); };
+        window.closeQuickEdit = () => { document.getElementById('quickEditPanel').classList.remove('active'); window.state.activeEditId = null; renderApp(); };
+        window.saveQuickEdit = () => { const id = document.getElementById('qeId').value; const idx = window.state.artists.findIndex(x => x.id === id); if(idx === -1) return; window.state.artists[idx] = { ...window.state.artists[idx], email: document.getElementById('qeEmail').value.trim(), handler: document.getElementById('qeHandler').value.trim(), status: document.getElementById('qeStatus').value, tag: document.getElementById('qeTag').value, odooApproved: document.getElementById('qeOdoo').checked, notes: document.getElementById('qeNotes').value, lastUpdate: new Date().toLocaleDateString('he-IL') }; set(ref(db, 'artists'), window.state.artists); renderApp(); };
+        window.saveQuickEditAndNext = () => { saveQuickEdit(); const visible = getVisibleArtists(); const currIdx = visible.findIndex(a => a.id === window.state.activeEditId); if(currIdx !== -1 && currIdx < visible.length - 1) openQuickEdit(visible[currIdx + 1].id); else closeQuickEdit(); };
+
+        // --- CONTEXT MENU ---
+        window.showContextMenu = (ev, id, isTrash) => { ev.preventDefault(); ev.stopPropagation(); window.state.cmArtistId = id; const cm = document.getElementById('contextMenu'); cm.style.display = 'block'; let x = ev.pageX, y = ev.pageY; if(x+180 > window.innerWidth) x = window.innerWidth-180; if(y+180 > window.innerHeight) y = window.innerHeight-180; cm.style.left = x + 'px'; cm.style.top = y + 'px'; const a = window.state.artists.find(x=>x.id===id); document.getElementById('cmOdooText').innerText = a.odooApproved ? '✗ ביטול אישור Odoo' : '✓ אישור ב-Odoo'; document.getElementById('cmDelText').innerText = isTrash ? '♻️ שחזר אמן' : '🗑️ העבר לסל מחזור'; document.getElementById('cmDelText').style.color = isTrash ? '#4CAF50' : '#ff5252'; };
+        window.closeAllMenus = (ev) => { document.getElementById('contextMenu').style.display = 'none'; document.getElementById('folderContextMenu').style.display = 'none'; if(!ev.target.closest('.header-actions')) document.getElementById('dropdownMenu').classList.remove('show'); };
+        window.cmAction = (action) => { const id = window.state.cmArtistId; const idx = window.state.artists.findIndex(a=>a.id===id); if(idx === -1) return; const a = window.state.artists[idx]; if(action === 'edit') openArtistModal(id); if(action === 'toggleOdoo') { a.odooApproved = !a.odooApproved; syncDB('שינה אישור Odoo'); } if(action === 'assignMe') { a.handler = window.state.me.name; syncDB('לקח טיפול באמן'); } if(action === 'delete') { window.takeSnapshot(a.deleted ? 'שחזור מהפח' : 'העברה לפח'); a.deleted = !a.deleted; syncDB(a.deleted ? 'העביר לסל מחזור' : 'שחזר אמן מסל מחזור'); } document.getElementById('contextMenu').style.display = 'none'; };
+
+        // --- MODALS & BULK EDIT ---
+        window.openArtistModal = (id = null) => { if (id) { const a = window.state.artists.find(x => x.id == id); document.getElementById('artistModalTitle').innerText = 'עריכת אמן'; document.getElementById('editArtistId').value = a.id; document.getElementById('editArtistName').value = a.name; document.getElementById('editArtistHandler').value = a.handler || ''; document.getElementById('editArtistEmail').value = a.email || ''; document.getElementById('editArtistStatus').value = a.status || 'none'; document.getElementById('editArtistCategory').value = a.category || 'popular'; document.getElementById('editArtistTagFull').value = a.tag || ''; document.getElementById('editArtistOdoo').checked = a.odooApproved || false; document.getElementById('editArtistNotes').value = a.notes || ''; } else { document.getElementById('artistModalTitle').innerText = 'אמן חדש'; ['editArtistId','editArtistName','editArtistEmail','editArtistNotes', 'editArtistHandler'].forEach(id => document.getElementById(id).value = ''); document.getElementById('editArtistStatus').value = 'none'; document.getElementById('editArtistCategory').value = 'popular'; document.getElementById('editArtistTagFull').value = ''; document.getElementById('editArtistOdoo').checked = false; } document.getElementById('modalArtist').style.display = 'flex'; };
+        window.saveArtistFull = () => { const name = document.getElementById('editArtistName').value.trim(); if(!name) return; const id = document.getElementById('editArtistId').value; const existIdx = window.state.artists.findIndex(a => a.name.trim() === name && a.id !== id); if(existIdx !== -1) { if(!confirm("אמן בשם זה כבר קיים במערכת! למזג נתונים?")) return; window.takeSnapshot('מיזוג כפילות'); window.state.artists[existIdx] = { ...window.state.artists[existIdx], email: document.getElementById('editArtistEmail').value.trim(), odooApproved: document.getElementById('editArtistOdoo').checked, status: document.getElementById('editArtistStatus').value, category: document.getElementById('editArtistCategory').value, tag: document.getElementById('editArtistTagFull').value, notes: document.getElementById('editArtistNotes').value, handler: document.getElementById('editArtistHandler').value, lastUpdate: new Date().toLocaleDateString('he-IL') }; syncDB(`מיזג אמן כפול: ${name}`); closeModals(); return; } const data = { name, email: document.getElementById('editArtistEmail').value.trim(), odooApproved: document.getElementById('editArtistOdoo').checked, status: document.getElementById('editArtistStatus').value, category: document.getElementById('editArtistCategory').value, tag: document.getElementById('editArtistTagFull').value, notes: document.getElementById('editArtistNotes').value, handler: document.getElementById('editArtistHandler').value, id: id || Date.now().toString(), folderId: window.state.filters.folder === 'all' || window.state.filters.folder === 'trash' ? null : window.state.filters.folder, lastUpdate: new Date().toLocaleDateString('he-IL'), deleted: false }; window.takeSnapshot(id ? 'עריכה מלאה' : 'יצירת אמן'); if (id) { const idx = window.state.artists.findIndex(a => a.id == id); window.state.artists[idx] = { ...window.state.artists[idx], ...data }; } else { window.state.artists.push(data); } syncDB(`שמירת פרטי אמן: ${name}`); closeModals(); };
+        window.hardDeleteArtistFromModal = () => { const id = document.getElementById('editArtistId').value; if(!id) return; if(confirm("מחיקה זו תמחק את האמן לצמיתות ללא מעבר לסל מחזור. להמשיך?")) { window.takeSnapshot('מחיקה לצמיתות'); window.state.artists = window.state.artists.filter(a => a.id !== id); syncDB('מחיקה לצמיתות'); closeModals(); } };
+        window.openBulkEditModal = () => { document.getElementById('bulkModalCount').innerText = window.state.selectedIds.size; document.getElementById('modalBulk').style.display = 'flex'; };
+        window.executeBulkEdit = () => { const nStat = document.getElementById('bulkStatus').value, nHand = document.getElementById('bulkHandler').value.trim(), nFol = document.getElementById('bulkFolder').value, nOdo = document.getElementById('bulkOdoo').value, nCat = document.getElementById('bulkCategory').value, nTag = document.getElementById('bulkTag').value; if(!nStat && !nHand && !nFol && !nOdo && !nCat && !nTag) return alert("לא הוגדר שינוי."); window.takeSnapshot('עריכה מרוכזת'); let c = 0; const tStr = new Date().toLocaleDateString('he-IL'); window.state.artists.forEach(a => { if(window.state.selectedIds.has(a.id)) { if(nStat) a.status = nStat; if(nHand) a.handler = nHand; if(nFol) a.folderId = nFol === 'all' ? null : nFol; if(nOdo === 'true') a.odooApproved = true; if(nOdo === 'false') a.odooApproved = false; if(nCat) a.category = nCat; if(nTag) a.tag = nTag; a.lastUpdate = tStr; c++; } }); window.state.selectedIds.clear(); syncDB(`עריכה מרוכזת של ${c} אמנים`); closeModals(); };
+
+        // --- SMART EXPORT ---
+        window.openExportModal = () => { document.getElementById('modalExport').style.display = 'flex'; };
+        window.executeExport = () => { const scope = document.getElementById('exportScope').value; const cols = Array.from(document.querySelectorAll('.export-col:checked')).map(cb => cb.value); let data = window.state.artists.filter(a=>!a.deleted); if(scope === 'filtered') data = getVisibleArtists(); if(scope === 'selected') { if(window.state.selectedIds.size===0) return alert("לא נבחרו אמנים ב-V."); data = window.state.artists.filter(a => window.state.selectedIds.has(a.id)); } const titles = { name:'שם האמן', email:'אימייל', tag:'תגית/ז\'אנר', status:'סטטוס', category:'עמודה', handler:'מטפל', odooApproved:'Odoo', notes:'הערות' }; let csv = "\uFEFF" + cols.map(c => titles[c]).join(',') + "\n"; data.forEach(a => { const row = cols.map(c => { let val = a[c] || ''; if(c === 'status') val = statNames[val]||val; if(c === 'category') val = window.state.columns[val]||val; if(c === 'odooApproved') val = a.odooApproved ? 'כן' : 'לא'; if(c === 'notes') val = val.replace(/\n/g, ' ').replace(/"/g, '""'); return `"${val}"`; }); csv += row.join(',') + "\n"; }); const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })); link.download = `JUSIC_Export_${new Date().getTime()}.csv`; link.click(); closeModals(); };
+
+        // --- CSV IMPORT ---
+        function splitCsv(str) { const r = []; let c = ''; let iq = false; for (let i = 0; i < str.length; i++) { if (str[i] === '"') iq = !iq; else if (str[i] === ',' && !iq) { r.push(c); c = ''; } else c += str[i]; } r.push(c); return r.map(s => s.trim().replace(/^"|"$/g, '')); }
+        window.parseCsvFile = () => { const f = document.getElementById('csvFileInput').files[0]; if(!f) return alert("בחר קובץ."); const r = new FileReader(); r.onload = (e) => { const lines = e.target.result.split('\n'); window.takeSnapshot('לפני ייבוא CSV מרוכז'); let c=0; for(let i=1; i<lines.length; i++) { const line = lines[i].trim(); if(!line) continue; const p = splitCsv(line); const name = p[0] ? p[0].substring(0,100) : ''; if (!name) continue; if(window.state.artists.findIndex(a => a.name.trim() === name) !== -1) continue; let handler = p[3] || window.state.me.name; if(handler.length > 40) handler = handler.substring(0,40) + '...'; window.state.artists.push({ id: Date.now().toString()+Math.random().toString(36).substr(2,5), name, category: Object.keys(window.state.columns).includes(p[1]) ? p[1] : 'popular', status: ['none', 'signed', 'failed', 'rejected'].includes(p[2]) ? p[2] : 'none', handler, email: p[4]||'', odooApproved: p[5]?.toLowerCase() === 'true' || p[5] === 'כן', notes: p[6]||'', lastUpdate: new Date().toLocaleDateString('he-IL'), deleted: false }); c++; } syncDB(`ייבוא קובץ אקסל (${c} אמנים חדשים)`); alert(`הייבוא הושלם. נוספו ${c} אמנים חדשים.`); closeModals(); }; r.readAsText(f, 'UTF-8'); }
+
+        // --- UTILS & DB ---
+        window.syncDB = (logAction) => { set(ref(db, 'artists'), window.state.artists); if(logAction) push(ref(db, 'audit_log'), { user: window.state.me.name, action: logAction, time: new Date().toLocaleString('he-IL')}); renderApp(); };
+        window.takeSnapshot = (desc, data = null) => { push(ref(db, 'snapshots'), { time: new Date().toLocaleString('he-IL'), desc, data: data || JSON.parse(JSON.stringify(window.state.artists)) }); };
+        window.takeManualSnapshot = () => { window.takeSnapshot('גיבוי יזום (ידני)', JSON.parse(JSON.stringify(window.state.artists))); alert("גיבוי בוצע בהצלחה!"); }
+        window.loadFromDataJs = () => { if (window.JUSIC_INITIAL_DATA && window.JUSIC_INITIAL_DATA.length > 0) { if(confirm("לשאוב מ-data.js? יתווספו רק אמנים חסרים.")) { window.takeSnapshot('גיבוי לפני שאיבת data.js'); let c = 0; window.JUSIC_INITIAL_DATA.forEach(d => { if(!window.state.artists.some(a => a.name === d.name)) { window.state.artists.push({...d, deleted:false}); c++; } }); syncDB(`שאיבת נתונים מקובץ (${c} חדשים)`); alert(`המידע נשאב! נוספו ${c} אמנים.`); } } else alert("לא נמצאו נתונים."); };
+        window.emptyTrash = () => { if(confirm("לרוקן את סל המחזור לחלוטין?")) { window.takeSnapshot('ריקון סל מחזור'); const b = window.state.artists.length; window.state.artists = window.state.artists.filter(a => !a.deleted); syncDB(`רוקן סל מחזור (${b - window.state.artists.length} נמחקו)`); alert("סל המחזור רוקן."); } };
+        function renderLogs(logData) { const d = document.getElementById('auditLog'); d.innerHTML=''; if(logData) Object.values(logData).reverse().forEach(l => { d.innerHTML += `<div style="margin-bottom:8px; border-bottom:1px solid var(--outline); padding-bottom:5px;"><b style="color:var(--primary)">${l.user}</b>: ${l.action}<br><small style="opacity:0.6">${l.time}</small></div>`; }); }
+        function renderSnapshots(snapData) { const d = document.getElementById('snapshotsList'); d.innerHTML=''; if(snapData) Object.entries(snapData).reverse().forEach(([k,s]) => { d.innerHTML += `<div style="display:flex; justify-content:space-between; background:var(--surface-variant); margin-bottom:5px; padding:5px; border-radius:5px;"><span>${s.time} - ${s.desc}</span><button class="btn-ghost" style="padding:2px 5px;" onclick="restoreSnap('${k}')">שחזר</button></div>`; }); }
+        window.restoreSnap = (k) => { if(confirm("שחזור ידרוס הכל למצב הגיבוי! להמשיך?")) get(ref(db, 'snapshots/'+k)).then(s=>{ if(s.exists()){ window.state.artists=s.val().data||[]; syncDB('שחזור מערכת מגיבוי'); alert('שוחזר בהצלחה'); }}); };
+
+        window.toggleViewMode = () => { window.state.viewMode = window.state.viewMode === 'kanban' ? 'list' : 'kanban'; localStorage.setItem('jusic_view', window.state.viewMode); document.getElementById('kanbanView').style.display = window.state.viewMode === 'kanban' ? 'flex' : 'none'; document.getElementById('listView').style.display = window.state.viewMode === 'list' ? 'flex' : 'none'; closeQuickEdit(); renderApp(); };
+        window.toggleMobileSidebar = () => { document.getElementById('sidebar').classList.toggle('mobile-open'); };
+        window.toggleTheme = () => { const m = document.body.classList.toggle('light-mode'); localStorage.setItem('jusic_theme', m?'light':'dark'); };
+        window.toggleDrawer = (id, show) => { document.getElementById(id).classList.toggle('open', show); };
+        window.closeModals = (keep) => { document.querySelectorAll('.modal-overlay').forEach(m => { if(m.id!==keep) m.style.display='none'; }); };
+        window.logout = () => { localStorage.removeItem('jusic_guest_logged_in'); if(auth.currentUser) signOut(auth).then(()=>location.reload()); else location.reload(); };
+        window.updateProfile = () => { const n = document.getElementById('profName').value.trim(); if(n) { localStorage.setItem('jusic_guest_name', n); window.state.me.name = n; alert("עודכן בהצלחה!"); window.toggleDrawer('profileDrawer', false); } };
+    </script>
+</body>
+</html>

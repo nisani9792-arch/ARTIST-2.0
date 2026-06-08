@@ -6,7 +6,7 @@ import { requireAccess } from "@/lib/access/require-access";
 const bulkSchema = z.object({
   ids: z.array(z.string().min(1)).min(1),
   handlerName: z.string().trim().min(1).optional(),
-  isSigned: z.boolean().optional(),
+  status: z.enum(["signed", "unsigned", "in_process"]).optional(),
 });
 
 export async function PATCH(request: NextRequest) {
@@ -16,7 +16,7 @@ export async function PATCH(request: NextRequest) {
     const body = bulkSchema.parse(await request.json());
     const artists = await bulkUpdateArtists(body.ids, {
       handlerName: body.handlerName,
-      isSigned: body.isSigned,
+      status: body.status,
     });
     return NextResponse.json({ artists, count: artists.length });
   } catch (error) {

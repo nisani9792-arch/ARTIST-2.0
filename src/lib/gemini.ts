@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
-import type { Artist } from "./types";
+import type { Artist, ArtistStatus } from "./types";
 
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
@@ -45,15 +45,14 @@ export async function analyzeStuckArtists(artists: Artist[]): Promise<string[]> 
   const payload = artists.slice(0, 200).map((a) => ({
     id: a.id,
     name: a.name,
-    isSigned: a.isSigned,
+    status: a.status,
     handlerName: a.handlerName,
     lastActionTimestamp: a.lastActionTimestamp,
   }));
 
   const model = getModel(
-    `אתה עוזר CRM לניהול אומנים. נתח אילו אומנים "תקועים" או מוזנחים לפי תאריך פעולה אחרונה וגורם מטפל.
-החזר JSON בלבד: {"stuckIds":["uuid",...],"reason":"..."}
-סמן אומנים שלא חתומים עם פעולה ישנה, או עם אותו מטפל ללא עדכון זמן רב.`,
+    `אתה עוזר CRM לניהול אומנים. נתח אילו אומנים "בעבודה" או מוזנחים לפי תאריך פעולה אחרונה.
+החזר JSON בלבד: {"stuckIds":["uuid",...],"reason":"..."}`,
   );
 
   const result = await model.generateContent(JSON.stringify(payload));
@@ -69,17 +68,17 @@ export const commandSchema = z.discriminatedUnion("action", [
     toHandler: z.string(),
     filter: z
       .object({
-        isSigned: z.boolean().optional(),
+        status: z.enum(["signed", "unsigned", "in_process"]).optional(),
       })
       .optional(),
   }),
   z.object({
-    action: z.literal("mark_signed"),
-    isSigned: z.boolean(),
+    action: z.literal("mark_status"),
+    status: z.enum(["signed", "unsigned", "in_process"]),
     filter: z
       .object({
         handlerName: z.string().optional(),
-        fromSigned: z.boolean().optional(),
+        fromStatus: z.enum(["signed", "unsigned", "in_process"]).optional(),
       })
       .optional(),
   }),
@@ -94,19 +93,16 @@ export type AiCommand = z.infer<typeof commandSchema>;
 
 export async function parseHebrewCommand(
   command: string,
-  context: { handlers: string[]; unsignedCount: number; signedCount: number },
+  context: { handlers: string[]; unsignedCount: number; signedCount: number; inProcessCount: number },
 ): Promise<AiCommand> {
   const model = getModel(
-    `אתה מפרש פקודות CRM בעברית לפעולות מובנות. החזר JSON בלבד לפי אחד מהסכמות:
-1) {"action":"reassign_handler","fromHandler":"יוסי","toHandler":"דוד","filter":{"isSigned":false}}
-2) {"action":"mark_signed","isSigned":true,"filter":{"handlerName":"יוסי","fromSigned":false}}
-3) {"action":"bulk_handler","ids":["uuid"],"handlerName":"דוד"}
-אל תמציא מזהים — עבור bulk_handler השתמש רק אם המשתמש ציין מזהים מפורשים.`,
+    `אתה מפרש פקודות CRM בעברית לפעולות מובנות. החזר JSON בלבד:
+1) {"action":"reassign_handler","fromHandler":"יוסי","toHandler":"דוד","filter":{"status":"unsigned"}}
+2) {"action":"mark_status","status":"signed","filter":{"handlerName":"יוסי","fromStatus":"unsigned"}}
+3) {"action":"bulk_handler","ids":["uuid"],"handlerName":"דוד"}`,
   );
 
-  const result = await model.generateContent(
-    JSON.stringify({ command, context }),
-  );
+  const result = await model.generateContent(JSON.stringify({ command, context }));
   const text = result.response.text();
   const raw = JSON.parse(extractJsonBlock(text));
   return commandSchema.parse(raw);
