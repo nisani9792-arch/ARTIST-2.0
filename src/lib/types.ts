@@ -7,6 +7,7 @@ export type Artist = {
   name: string;
   status: ArtistStatus;
   isOdooApproved: boolean;
+  songCount: number;
   handlerName: string;
   lastActionTimestamp: string;
 };
@@ -42,6 +43,7 @@ export const toArtist = (row: ArtistRow): Artist => ({
   name: row.nameHe,
   status: normalizeStatus(row.status),
   isOdooApproved: row.isOdooApproved,
+  songCount: row.songCount ?? 0,
   handlerName: row.owner,
   lastActionTimestamp: row.updatedAt,
 });

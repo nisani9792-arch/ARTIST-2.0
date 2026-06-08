@@ -7,6 +7,8 @@ const bulkSchema = z.object({
   ids: z.array(z.string().min(1)).min(1),
   handlerName: z.string().trim().min(1).optional(),
   status: z.enum(["signed", "unsigned", "in_process"]).optional(),
+  isOdooApproved: z.boolean().optional(),
+  songCount: z.number().int().min(0).optional(),
 });
 
 export async function PATCH(request: NextRequest) {
@@ -17,6 +19,8 @@ export async function PATCH(request: NextRequest) {
     const artists = await bulkUpdateArtists(body.ids, {
       handlerName: body.handlerName,
       status: body.status,
+      isOdooApproved: body.isOdooApproved,
+      songCount: body.songCount,
     });
     return NextResponse.json({ artists, count: artists.length });
   } catch (error) {

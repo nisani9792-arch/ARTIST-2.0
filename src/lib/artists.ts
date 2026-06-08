@@ -57,6 +57,7 @@ export async function createArtist(name: string): Promise<Artist> {
       status: "unsigned",
       owner: DEFAULT_HANDLER,
       isOdooApproved: false,
+      songCount: 0,
       updatedAt: new Date().toISOString(),
     })
     .returning();
@@ -65,7 +66,7 @@ export async function createArtist(name: string): Promise<Artist> {
 }
 
 type ArtistPatch = Partial<
-  Pick<Artist, "name" | "status" | "isOdooApproved" | "handlerName">
+  Pick<Artist, "name" | "status" | "isOdooApproved" | "songCount" | "handlerName">
 >;
 
 export async function updateArtist(id: string, patch: ArtistPatch): Promise<Artist | null> {
@@ -76,6 +77,7 @@ export async function updateArtist(id: string, patch: ArtistPatch): Promise<Arti
   if (patch.name !== undefined) values.nameHe = patch.name.trim();
   if (patch.status !== undefined) values.status = patch.status;
   if (patch.isOdooApproved !== undefined) values.isOdooApproved = patch.isOdooApproved;
+  if (patch.songCount !== undefined) values.songCount = Math.max(0, Math.floor(patch.songCount));
   if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();
 
   const [row] = await db.update(artists).set(values).where(eq(artists.id, id)).returning();
@@ -85,7 +87,7 @@ export async function updateArtist(id: string, patch: ArtistPatch): Promise<Arti
 
 export async function bulkUpdateArtists(
   ids: string[],
-  patch: Partial<Pick<Artist, "handlerName" | "status">>,
+  patch: Partial<Pick<Artist, "handlerName" | "status" | "isOdooApproved" | "songCount">>,
 ): Promise<Artist[]> {
   if (ids.length === 0) return [];
 
@@ -95,6 +97,8 @@ export async function bulkUpdateArtists(
 
   if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();
   if (patch.status !== undefined) values.status = patch.status;
+  if (patch.isOdooApproved !== undefined) values.isOdooApproved = patch.isOdooApproved;
+  if (patch.songCount !== undefined) values.songCount = Math.max(0, Math.floor(patch.songCount));
 
   const rows = await db
     .update(artists)

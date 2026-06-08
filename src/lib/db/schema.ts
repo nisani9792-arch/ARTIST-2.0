@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -15,6 +16,7 @@ export const artists = pgTable(
     status: text("status").notNull().default("unsigned"),
     owner: text("owner").notNull().default("לא שויך"),
     isOdooApproved: boolean("is_odoo_approved").notNull().default(false),
+    songCount: integer("song_count").notNull().default(0),
     updatedAt: timestamp("updated_at", {
       withTimezone: true,
       mode: "string",

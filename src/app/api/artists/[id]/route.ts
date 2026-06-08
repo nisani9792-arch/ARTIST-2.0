@@ -7,6 +7,7 @@ const patchSchema = z.object({
   name: z.string().trim().min(1).optional(),
   status: z.enum(["signed", "unsigned", "in_process"]).optional(),
   isOdooApproved: z.boolean().optional(),
+  songCount: z.number().int().min(0).optional(),
   handlerName: z.string().trim().min(1).optional(),
 });
 

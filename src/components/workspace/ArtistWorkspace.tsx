@@ -144,8 +144,36 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
     }
   };
 
+  const handleBulkOdoo = useCallback(
+    async (approved: boolean) => {
+      try {
+        await bulkUpdate({ ids: [...selectedIds], isOdooApproved: approved });
+        showToast(`עודכנו ${selectedIds.size} אומנים — Odoo`);
+        setSelectedIds(new Set());
+      } catch {
+        showToast("עדכון Odoo נכשל");
+      }
+    },
+    [bulkUpdate, selectedIds],
+  );
+
+  const handleBulkSongCount = useCallback(
+    async (count: number) => {
+      try {
+        await bulkUpdate({ ids: [...selectedIds], songCount: count });
+        showToast(`עודכנו כמות שירים ל-${count} עבור ${selectedIds.size} אומנים`);
+        setSelectedIds(new Set());
+      } catch {
+        showToast("עדכון כמות שירים נכשל");
+      }
+    },
+    [bulkUpdate, selectedIds],
+  );
+
   const handleSaveDetail = async (
-    patch: Partial<Pick<Artist, "name" | "handlerName" | "status" | "isOdooApproved">>,
+    patch: Partial<
+      Pick<Artist, "name" | "handlerName" | "status" | "isOdooApproved" | "songCount">
+    >,
   ) => {
     if (!detailArtist) return;
     await updateArtist({ id: detailArtist.id, patch });
@@ -185,7 +213,7 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
 
       <OdooAlertBanner count={odooPendingCount} />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 md:gap-4 md:p-4">
         <StatusProgressBar stats={stats} />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -202,8 +230,8 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
         {isLoading ? (
           <WorkspaceLoadingSkeleton />
         ) : (
-          <div className="flex min-h-0 flex-1 gap-4">
-            <div className="flex min-h-0 min-w-0 flex-1">
+          <div className="flex min-h-0 flex-1 gap-2 md:gap-4">
+            <div className="flex min-h-0 min-w-0 flex-1 pb-14 md:pb-0">
               <KanbanBoard
                 artists={artists}
                 selectedIds={selectedIds}
@@ -244,13 +272,15 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
             showToast("עדכון מטפל נכשל");
           }
         }}
+        onApplyOdoo={(approved) => void handleBulkOdoo(approved)}
+        onApplySongCount={(count) => void handleBulkSongCount(count)}
         onClearSelection={() => setSelectedIds(new Set())}
       />
 
       <button
         type="button"
-        className={`fixed end-4 z-40 flex size-12 items-center justify-center rounded-full bg-blue-600 text-2xl font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-xl ${
-          selectedIds.size > 0 ? "bottom-24" : "bottom-20"
+        className={`fixed end-4 z-40 flex size-11 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-xl ${
+          selectedIds.size > 0 ? "bottom-[4.5rem] md:bottom-24" : "bottom-20"
         }`}
         aria-label="הוסף אומן"
         onClick={() => {

@@ -39,7 +39,7 @@ export function useArtists(search: string) {
       patch,
     }: {
       id: string;
-      patch: Partial<Pick<Artist, "name" | "status" | "isOdooApproved" | "handlerName">>;
+      patch: Partial<Pick<Artist, "name" | "status" | "isOdooApproved" | "songCount" | "handlerName">>;
     }) => {
       const res = await fetch(`/api/artists/${id}`, {
         method: "PATCH",
@@ -73,15 +73,19 @@ export function useArtists(search: string) {
       ids,
       handlerName,
       status,
+      isOdooApproved,
+      songCount,
     }: {
       ids: string[];
       handlerName?: string;
       status?: ArtistStatus;
+      isOdooApproved?: boolean;
+      songCount?: number;
     }) => {
       const res = await fetch("/api/artists/bulk", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, handlerName, status }),
+        body: JSON.stringify({ ids, handlerName, status, isOdooApproved, songCount }),
       });
       if (!res.ok) throw new Error("עדכון מרובה נכשל");
       return res.json();

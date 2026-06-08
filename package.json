@@ -16,7 +16,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "py -3 scripts/seed.py",
     "db:migrate-odoo": "py -3 scripts/migrate-odoo.py",
-    "db:migrate-in-process": "node scripts/migrate-in-process.mjs"
+    "db:migrate-in-process": "node scripts/migrate-in-process.mjs",
+    "db:migrate-song-count": "node scripts/migrate-song-count.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
