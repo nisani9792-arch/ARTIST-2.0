@@ -1,22 +1,14 @@
 "use client";
 
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import { useMemo, useRef, useState } from "react";
-import { ArtistZone } from "./ArtistZone";
+import { useCallback, useMemo, useState } from "react";
+import { ArtistDetailPanel } from "./ArtistDetailPanel";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { OdooAlertBanner } from "./OdooAlertBanner";
-import { WorkspaceTopBar } from "./WorkspaceTopBar";
+import { WorkspaceToolbar } from "./WorkspaceToolbar";
+import { KanbanBoard } from "./kanban/KanbanBoard";
+import type { KanbanColumnId } from "./kanban/constants";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useArtists } from "@/hooks/useArtists";
-import { ArtistCard } from "@/components/artist/ArtistCard";
 import { InstallPrompt } from "@/components/m3/InstallPrompt";
 import { ServiceWorkerRegister } from "@/components/m3/ServiceWorkerRegister";
 import type { Artist } from "@/lib/types";
@@ -30,11 +22,9 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
   const [search, setSearch] = useState("");
   const [quickName, setQuickName] = useState("");
   const [aiCommand, setAiCommand] = useState("");
-  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [activeArtist, setActiveArtist] = useState<Artist | null>(null);
+  const [detailArtist, setDetailArtist] = useState<Artist | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const anchorIdRef = useRef<string | null>(null);
 
   const debouncedSearch = useDebouncedValue(search, 150);
   const {
@@ -48,15 +38,14 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
     isCommandPending,
   } = useArtists(debouncedSearch);
 
-  const unsigned = useMemo(() => artists.filter((a) => !a.isSigned), [artists]);
-  const signed = useMemo(() => artists.filter((a) => a.isSigned), [artists]);
+  const handlers = useMemo(() => {
+    const set = new Set(artists.map((a) => a.handlerName).filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b, "he"));
+  }, [artists]);
+
   const odooPendingCount = useMemo(
     () => artists.filter((a) => a.isSigned && !a.isOdooApproved).length,
     [artists],
-  );
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
   const showToast = (message: string) => {
@@ -64,55 +53,46 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
     window.setTimeout(() => setToast(null), 3200);
   };
 
-  const handleSelect = (zoneArtists: Artist[], artist: Artist, event: React.MouseEvent) => {
-    if (!selectionMode) return;
-
-    if (event.shiftKey && anchorIdRef.current) {
-      const ids = zoneArtists.map((a) => a.id);
-      const start = ids.indexOf(anchorIdRef.current);
-      const end = ids.indexOf(artist.id);
-      if (start !== -1 && end !== -1) {
-        const [from, to] = start < end ? [start, end] : [end, start];
-        const range = ids.slice(from, to + 1);
-        setSelectedIds((prev) => new Set([...prev, ...range]));
-        return;
-      }
-    }
-
+  const toggleSelected = useCallback((artistId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(artist.id)) next.delete(artist.id);
-      else next.add(artist.id);
+      if (next.has(artistId)) next.delete(artistId);
+      else next.add(artistId);
       return next;
     });
-    anchorIdRef.current = artist.id;
-  };
+  }, []);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const artist = event.active.data.current?.artist as Artist | undefined;
-    if (artist) setActiveArtist(artist);
-  };
+  const setSelection = useCallback((ids: string[]) => {
+    setSelectedIds(new Set(ids));
+  }, []);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveArtist(null);
-    const artist = event.active.data.current?.artist as Artist | undefined;
-    const overId = event.over?.id;
-    if (!artist || !overId) return;
-
-    const targetSigned = overId === "signed";
-    const targetUnsigned = overId === "unsigned";
-    if (!targetSigned && !targetUnsigned) return;
-    if (artist.isSigned === targetSigned) return;
-
-    try {
-      await updateArtist({
-        id: artist.id,
-        patch: { isSigned: targetSigned },
-      });
-    } catch {
-      showToast("עדכון סטטוס נכשל");
+  const selectAllFiltered = useCallback(() => {
+    if (artists.length === 0) return;
+    if (artists.length > 500) {
+      const ok = window.confirm(`לבחור את כל ${artists.length} האומנים המוצגים?`);
+      if (!ok) return;
     }
-  };
+    setSelectedIds(new Set(artists.map((a) => a.id)));
+    showToast(`נבחרו ${artists.length} אומנים`);
+  }, [artists]);
+
+  const handleBulkStatusChange = useCallback(
+    async (ids: string[], columnId: KanbanColumnId) => {
+      if (columnId === "stuck") {
+        showToast("עמודת תקוע מזוהה אוטומטית ע״י AI — גרור לחתום או לא חתום");
+        return;
+      }
+      const isSigned = columnId === "signed";
+      try {
+        await bulkUpdate({ ids, isSigned });
+        showToast(`עודכנו ${ids.length} אומנים ל${isSigned ? "חתום" : "לא חתום"}`);
+        setSelectedIds(new Set());
+      } catch {
+        showToast("עדכון סטטוס נכשל");
+      }
+    },
+    [bulkUpdate],
+  );
 
   const handleQuickCreate = async () => {
     const name = quickName.trim();
@@ -123,14 +103,6 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
       showToast(`נוצר: ${name}`);
     } catch {
       showToast("יצירה נכשלה");
-    }
-  };
-
-  const handleOdooToggle = async (artist: Artist, approved: boolean) => {
-    try {
-      await updateArtist({ id: artist.id, patch: { isOdooApproved: approved } });
-    } catch {
-      showToast("עדכון אישור אודו נכשל");
     }
   };
 
@@ -146,17 +118,26 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
     }
   };
 
+  const handleSaveDetail = async (
+    patch: Partial<Pick<Artist, "name" | "handlerName" | "isSigned" | "isOdooApproved">>,
+  ) => {
+    if (!detailArtist) return;
+    await updateArtist({ id: detailArtist.id, patch });
+    showToast(`עודכן: ${patch.name ?? detailArtist.name}`);
+  };
+
   return (
-    <div className="workspace">
+    <div className="workspace workspace--kanban">
       <ServiceWorkerRegister />
       <InstallPrompt />
+
       {offline && (
         <div className="odoo-alert" role="status">
           מצב לא מקוון — עבודה עם נתונים שמורים במכשיר
         </div>
       )}
 
-      <WorkspaceTopBar
+      <WorkspaceToolbar
         operatorName={operatorName}
         search={search}
         onSearchChange={setSearch}
@@ -166,75 +147,47 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
         aiCommand={aiCommand}
         onAiCommandChange={setAiCommand}
         onAiSubmit={handleAiSubmit}
-        selectionMode={selectionMode}
-        onToggleSelectionMode={() => {
-          setSelectionMode((v) => !v);
-          if (selectionMode) setSelectedIds(new Set());
-        }}
         isAiPending={isCommandPending}
+        totalCount={artists.length}
+        selectedCount={selectedIds.size}
+        onSelectAll={selectAllFiltered}
+        onClearSelection={() => setSelectedIds(new Set())}
       />
 
       <OdooAlertBanner count={odooPendingCount} />
 
-      {isLoading ? (
-        <div className="workspace__loading">טוען אומנים...</div>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="workspace__zones">
-            <ArtistZone
-              zoneId="unsigned"
-              title="לא חתומים"
-              icon="📁"
-              artists={unsigned}
-              selectedIds={selectedIds}
-              selectionMode={selectionMode}
-              stuckIds={stuckIds}
-              onSelect={(artist, event) => handleSelect(unsigned, artist, event)}
-              onOdooToggle={handleOdooToggle}
-            />
-            <ArtistZone
-              zoneId="signed"
-              title="חתומים"
-              icon="✓"
-              artists={signed}
-              selectedIds={selectedIds}
-              selectionMode={selectionMode}
-              stuckIds={stuckIds}
-              onSelect={(artist, event) => handleSelect(signed, artist, event)}
-              onOdooToggle={handleOdooToggle}
-            />
-          </div>
-
-          <DragOverlay>
-            {activeArtist ? (
-              <ArtistCard
-                artist={activeArtist}
-                selected={false}
-                selectionMode={false}
-                isStuck={stuckIds.has(activeArtist.id)}
-                onSelect={() => {}}
-              />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      )}
+      <div className="workspace__body">
+        {isLoading ? (
+          <div className="workspace__loading">טוען אומנים...</div>
+        ) : (
+          <KanbanBoard
+            artists={artists}
+            stuckIds={stuckIds}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelected}
+            onSetSelection={setSelection}
+            onOpenDetail={setDetailArtist}
+            onBulkStatusChange={handleBulkStatusChange}
+          />
+        )}
+      </div>
 
       <BulkActionsBar
-        count={selectedIds.size}
-        onClear={() => setSelectedIds(new Set())}
+        selectedCount={selectedIds.size}
+        handlers={handlers}
+        onApplyStatus={(status) => {
+          void handleBulkStatusChange([...selectedIds], status);
+        }}
         onApplyHandler={async (handler) => {
           try {
             await bulkUpdate({ ids: [...selectedIds], handlerName: handler });
             showToast(`עודכנו ${selectedIds.size} אומנים`);
             setSelectedIds(new Set());
           } catch {
-            showToast("עדכון מרובה נכשל");
+            showToast("עדכון מטפל נכשל");
           }
         }}
+        onClearSelection={() => setSelectedIds(new Set())}
       />
 
       <button
@@ -258,6 +211,12 @@ export function ArtistWorkspace({ operatorName, offline }: ArtistWorkspaceProps)
           {toast}
         </div>
       )}
+
+      <ArtistDetailPanel
+        artist={detailArtist}
+        onClose={() => setDetailArtist(null)}
+        onSave={handleSaveDetail}
+      />
     </div>
   );
 }

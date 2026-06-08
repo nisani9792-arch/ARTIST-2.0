@@ -1,6 +1,6 @@
 "use client";
 
-type WorkspaceTopBarProps = {
+type WorkspaceToolbarProps = {
   operatorName?: string | null;
   search: string;
   onSearchChange: (value: string) => void;
@@ -10,12 +10,14 @@ type WorkspaceTopBarProps = {
   aiCommand: string;
   onAiCommandChange: (value: string) => void;
   onAiSubmit: () => void;
-  selectionMode: boolean;
-  onToggleSelectionMode: () => void;
   isAiPending: boolean;
+  totalCount: number;
+  selectedCount: number;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
 };
 
-export function WorkspaceTopBar({
+export function WorkspaceToolbar({
   operatorName,
   search,
   onSearchChange,
@@ -25,10 +27,12 @@ export function WorkspaceTopBar({
   aiCommand,
   onAiCommandChange,
   onAiSubmit,
-  selectionMode,
-  onToggleSelectionMode,
   isAiPending,
-}: WorkspaceTopBarProps) {
+  totalCount,
+  selectedCount,
+  onSelectAll,
+  onClearSelection,
+}: WorkspaceToolbarProps) {
   return (
     <header className="workspace-topbar">
       <div className="workspace-topbar__brand">
@@ -42,7 +46,9 @@ export function WorkspaceTopBar({
         <div className="workspace-topbar__titles">
           <span className="workspace-topbar__logo">ARTIST 2.0</span>
           <span className="workspace-topbar__subtitle">
-            {operatorName ? `מפעיל: ${operatorName}` : "שולחן עבודה"}
+            {operatorName ? `מפעיל: ${operatorName}` : "לוח קנבן"}
+            {totalCount > 0 && ` · ${totalCount.toLocaleString("he-IL")} אומנים`}
+            {selectedCount > 0 && ` · ${selectedCount} נבחרו`}
           </span>
         </div>
       </div>
@@ -85,13 +91,15 @@ export function WorkspaceTopBar({
           aria-label="פקודת AI"
         />
 
-        <button
-          type="button"
-          className={selectionMode ? "m3-btn m3-btn--filled" : "m3-btn"}
-          onClick={onToggleSelectionMode}
-        >
-          {selectionMode ? "סיום בחירה" : "בחירה"}
+        <button type="button" className="m3-btn" onClick={onSelectAll} title="בחר את כל האומנים המוצגים">
+          בחר הכל
         </button>
+
+        {selectedCount > 0 && (
+          <button type="button" className="m3-btn" onClick={onClearSelection}>
+            נקה בחירה
+          </button>
+        )}
       </div>
     </header>
   );
