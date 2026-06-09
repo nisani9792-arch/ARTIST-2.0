@@ -29,6 +29,7 @@ import { ServiceWorkerRegister } from "@/components/m3/ServiceWorkerRegister";
 import { countOdooPending } from "@/lib/artist-stats";
 import { formatHebrewDateTime } from "@/lib/format";
 import type { Artist, ArtistStatus } from "@/lib/types";
+import { STATUS_META } from "@/lib/types";
 import { useUiStore } from "@/stores";
 
 type ArtistWorkspaceProps = {
@@ -77,6 +78,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     refetch,
     createArtist,
     updateArtist,
+    updateStatus,
     deleteArtist,
     bulkUpdate,
     runCommand,
@@ -166,19 +168,16 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
 
   const handleBulkStatusChange = useCallback(
     async (ids: string[], status: ArtistStatus) => {
+      if (ids.length === 0) return;
       try {
-        if (ids.length === 1) {
-          await updateArtist({ id: ids[0], patch: { status } });
-        } else {
-          await bulkUpdate({ ids, status });
-        }
-        showToast(`עודכנו ${ids.length} אומנים`);
+        await updateStatus({ ids, status });
+        showToast(`עודכנו ${ids.length} אומנים — ${STATUS_META[status].label}`);
         setSelectedIds(new Set());
-      } catch {
-        showToast("עדכון סטטוס נכשל");
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "עדכון סטטוס נכשל");
       }
     },
-    [bulkUpdate, updateArtist],
+    [updateStatus],
   );
 
   const handleExportColumn = useCallback((status: ArtistStatus) => {
@@ -268,8 +267,19 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     >,
   ) => {
     if (!detailArtist) return;
-    await updateArtist({ id: detailArtist.id, patch });
-    showToast(`עודכן: ${patch.name ?? detailArtist.name}`);
+    try {
+      const { status: newStatus, ...rest } = patch;
+      if (newStatus !== undefined && newStatus !== detailArtist.status) {
+        await updateStatus({ ids: [detailArtist.id], status: newStatus });
+      }
+      if (Object.keys(rest).length > 0) {
+        await updateArtist({ id: detailArtist.id, patch: rest });
+      }
+      showToast(`עודכן: ${patch.name ?? detailArtist.name}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "עדכון נכשל");
+      throw err;
+    }
   };
 
   const handleContextMenu = (artist: Artist, event: MouseEvent) => {
@@ -590,9 +600,11 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
       <CommandMenu
         artists={allArtists}
         onStatusChange={(id, status) => {
-          void updateArtist({ id, patch: { status } }).then(() =>
-            showToast(`סטטוס עודכן ל-${status === "signed" ? "חתום" : status === "in_process" ? "בעבודה" : "לא חתום"}`),
-          ).catch(() => showToast("עדכון סטטוס נכשל"));
+          void updateStatus({ ids: [id], status })
+            .then(() => showToast(`סטטוס עודכן ל-${STATUS_META[status].label}`))
+            .catch((err) =>
+              showToast(err instanceof Error ? err.message : "עדכון סטטוס נכשל"),
+            );
         }}
         onOdooChange={(id, approved) => {
           void updateArtist({ id, patch: { isOdooApproved: approved } });

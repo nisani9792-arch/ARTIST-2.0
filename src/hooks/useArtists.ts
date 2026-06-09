@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { encodeArtistIdForPath } from "@/lib/artist-id";
 import { loadArtistsCache, saveArtistsCache } from "@/lib/artists-cache";
 import type { Artist, ArtistStats, ArtistStatus } from "@/lib/types";
 
@@ -39,6 +40,25 @@ export function useArtists(search: string) {
       : undefined,
   });
 
+  const invalidateArtists = () => queryClient.invalidateQueries({ queryKey: ["artists"] });
+
+  const applyOptimisticPatch = async (
+    ids: Set<string>,
+    patch: Partial<Artist>,
+  ) => {
+    await queryClient.cancelQueries({ queryKey: ["artists"] });
+    const previous = queryClient.getQueriesData<ArtistsResponse>({ queryKey: ["artists"] });
+    queryClient.setQueriesData<ArtistsResponse>({ queryKey: ["artists"] }, (old) =>
+      old
+        ? {
+            ...old,
+            artists: old.artists.map((a) => (ids.has(a.id) ? { ...a, ...patch } : a)),
+          }
+        : old,
+    );
+    return { previous };
+  };
+
   const createMutation = useMutation({
     mutationFn: async (input: CreateArtistInput | string) => {
       const payload = typeof input === "string" ? { name: input } : input;
@@ -53,7 +73,7 @@ export function useArtists(search: string) {
       }
       return (await res.json()).artist as Artist;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
+    onSuccess: invalidateArtists,
   });
 
   const updateMutation = useMutation({
@@ -78,31 +98,58 @@ export function useArtists(search: string) {
         >
       >;
     }) => {
-      const res = await fetch(`/api/artists/${id}`, {
+      const { status: _skipStatus, ...rest } = patch;
+      if (Object.keys(rest).length === 0 && patch.status !== undefined) {
+        throw new Error("Use updateStatus for status-only changes");
+      }
+      const res = await fetch(`/api/artists/${encodeArtistIdForPath(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
+        body: JSON.stringify(rest),
       });
-      if (!res.ok) throw new Error("עדכון נכשל");
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "עדכון נכשל");
+      }
       return (await res.json()).artist as Artist;
     },
     onMutate: async ({ id, patch }) => {
-      await queryClient.cancelQueries({ queryKey: ["artists"] });
-      const previous = queryClient.getQueriesData<ArtistsResponse>({ queryKey: ["artists"] });
-      queryClient.setQueriesData<ArtistsResponse>({ queryKey: ["artists"] }, (old) =>
-        old
-          ? {
-              ...old,
-              artists: old.artists.map((a) => (a.id === id ? { ...a, ...patch } : a)),
-            }
-          : old,
-      );
-      return { previous };
+      const ids = new Set([id]);
+      return applyOptimisticPatch(ids, patch);
     },
     onError: (_err, _vars, context) => {
       context?.previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
+    onSettled: invalidateArtists,
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: ArtistStatus }) => {
+      const res = await fetch("/api/artists/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, status }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        count?: number;
+      };
+      if (!res.ok) {
+        throw new Error(body.error || "עדכון סטטוס נכשל");
+      }
+      return body;
+    },
+    onMutate: async ({ ids, status }) => {
+      const idSet = new Set(ids);
+      return applyOptimisticPatch(idSet, {
+        status,
+        lastActionTimestamp: new Date().toISOString(),
+      });
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    },
+    onSettled: invalidateArtists,
   });
 
   const bulkMutation = useMutation({
@@ -119,6 +166,17 @@ export function useArtists(search: string) {
       isOdooApproved?: boolean;
       songCount?: number;
     }) => {
+      if (status !== undefined && handlerName === undefined && isOdooApproved === undefined && songCount === undefined) {
+        const res = await fetch("/api/artists/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids, status }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(body.error || "עדכון סטטוס נכשל");
+        return body;
+      }
+
       const res = await fetch("/api/artists/bulk", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -130,16 +188,28 @@ export function useArtists(search: string) {
       }
       return res.json();
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
+    onMutate: async ({ ids, status, handlerName, isOdooApproved, songCount }) => {
+      const patch: Partial<Artist> = {};
+      if (status !== undefined) patch.status = status;
+      if (handlerName !== undefined) patch.handlerName = handlerName;
+      if (isOdooApproved !== undefined) patch.isOdooApproved = isOdooApproved;
+      if (songCount !== undefined) patch.songCount = songCount;
+      if (Object.keys(patch).length === 0) return undefined;
+      return applyOptimisticPatch(new Set(ids), patch);
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    },
+    onSettled: invalidateArtists,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/artists/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/artists/${encodeArtistIdForPath(id)}`, { method: "DELETE" });
       if (!res.ok) throw new Error("מחיקה נכשלה");
       return (await res.json()).artist as Artist;
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
+    onSettled: invalidateArtists,
   });
 
   const commandMutation = useMutation({
@@ -153,7 +223,7 @@ export function useArtists(search: string) {
       if (!res.ok) throw new Error(data.error || "פקודה נכשלה");
       return data as { message: string; affected: number };
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
+    onSuccess: invalidateArtists,
   });
 
   return {
@@ -167,6 +237,7 @@ export function useArtists(search: string) {
     refetch: artistsQuery.refetch,
     createArtist: createMutation.mutateAsync,
     updateArtist: updateMutation.mutateAsync,
+    updateStatus: statusMutation.mutateAsync,
     deleteArtist: deleteMutation.mutateAsync,
     bulkUpdate: bulkMutation.mutateAsync,
     runCommand: commandMutation.mutateAsync,

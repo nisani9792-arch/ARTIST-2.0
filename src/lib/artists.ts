@@ -1,4 +1,5 @@
 import { and, eq, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { normalizeArtistId } from "./artist-id";
 import { db } from "./db";
 import { artists, folders, type ArtistRow } from "./db/schema";
 import {
@@ -111,8 +112,9 @@ type ArtistPatch = Partial<
 >;
 
 export async function updateArtist(id: string, patch: ArtistPatch): Promise<Artist | null> {
+  const artistId = normalizeArtistId(id);
   const values: Record<string, unknown> = {
-    updatedAt: new Date().toISOString(),
+    updatedAt: sql`NOW()`,
   };
 
   if (patch.name !== undefined) values.nameHe = patch.name.trim();
@@ -126,9 +128,42 @@ export async function updateArtist(id: string, patch: ArtistPatch): Promise<Arti
   if (patch.folderId !== undefined) values.folderId = patch.folderId;
   if (patch.deletedAt !== undefined) values.deletedAt = patch.deletedAt;
 
-  const [row] = await db.update(artists).set(values).where(eq(artists.id, id)).returning();
+  const [row] = await db
+    .update(artists)
+    .set(values)
+    .where(and(eq(artists.id, artistId), activeArtists()))
+    .returning();
 
   return row ? toArtist(row) : null;
+}
+
+export type StatusUpdateResult = {
+  artists: Artist[];
+  count: number;
+  missingIds: string[];
+};
+
+/** Primary API for changing artist status — avoids Hebrew ids in URL paths. */
+export async function updateArtistsStatus(
+  ids: string[],
+  status: ArtistStatus,
+): Promise<StatusUpdateResult> {
+  const uniqueIds = [...new Set(ids.map(normalizeArtistId).filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    throw new Error("לא צוינו אומנים לעדכון");
+  }
+
+  const updated = await bulkUpdateArtists(uniqueIds, { status });
+  const updatedIds = new Set(updated.map((a) => a.id));
+  const missingIds = uniqueIds.filter((id) => !updatedIds.has(id));
+
+  if (updated.length === 0) {
+    throw new Error(
+      `לא נמצאו אומנים פעילים לעדכון. ניסיון לעדכן ${uniqueIds.length} מזהים.`,
+    );
+  }
+
+  return { artists: updated, count: updated.length, missingIds };
 }
 
 export async function softDeleteArtist(id: string): Promise<Artist | null> {
@@ -145,11 +180,11 @@ export async function bulkUpdateArtists(
   ids: string[],
   patch: Partial<Pick<Artist, "handlerName" | "status" | "isOdooApproved" | "songCount" | "folderId">>,
 ): Promise<Artist[]> {
-  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  const uniqueIds = [...new Set(ids.map(normalizeArtistId).filter(Boolean))];
   if (uniqueIds.length === 0) return [];
 
   const values: Record<string, unknown> = {
-    updatedAt: new Date().toISOString(),
+    updatedAt: sql`NOW()`,
   };
 
   if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();

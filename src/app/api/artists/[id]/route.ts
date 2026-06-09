@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
+import { normalizeArtistId } from "@/lib/artist-id";
 import { softDeleteArtist, updateArtist } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
+import { runMigrations } from "@/lib/db/migrate";
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).optional(),
@@ -24,7 +26,9 @@ export async function PATCH(
   try {
     const access = await requireAccess();
     if (!access.ok) return access.response;
-    const { id } = await params;
+    await runMigrations();
+    const { id: rawId } = await params;
+    const id = normalizeArtistId(rawId);
     const body = patchSchema.parse(await request.json());
     const artist = await updateArtist(id, body);
 
@@ -50,8 +54,9 @@ export async function DELETE(
   try {
     const access = await requireAccess();
     if (!access.ok) return access.response;
-    const { id } = await params;
-    const artist = await softDeleteArtist(id);
+    await runMigrations();
+    const { id: rawId } = await params;
+    const artist = await softDeleteArtist(normalizeArtistId(rawId));
     if (!artist) {
       return NextResponse.json({ error: "אומן לא נמצא" }, { status: 404 });
     }
