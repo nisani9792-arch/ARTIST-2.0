@@ -21,6 +21,14 @@ const statusOptions = (Object.keys(STATUS_META) as ArtistStatus[]).map((status) 
   label: STATUS_META[status].label,
 }));
 
+const odooOptions = [
+  { value: "unchanged", label: "ללא שינוי Odoo" },
+  { value: "approve", label: "אשר Odoo" },
+  { value: "revoke", label: "בטל Odoo" },
+] as const;
+
+type OdooChoice = (typeof odooOptions)[number]["value"];
+
 export function BulkActionsBar({
   selectedCount,
   handlers,
@@ -32,6 +40,7 @@ export function BulkActionsBar({
 }: BulkActionsBarProps) {
   const [bulkStatus, setBulkStatus] = useState<ArtistStatus>("unsigned");
   const [bulkHandler, setBulkHandler] = useState("");
+  const [bulkOdoo, setBulkOdoo] = useState<OdooChoice>("unchanged");
   const [songCount, setSongCount] = useState("");
   const [expanded, setExpanded] = useState(false);
 
@@ -42,6 +51,16 @@ export function BulkActionsBar({
     if (Number.isNaN(n) || n < 0) return;
     onApplySongCount(n);
     setSongCount("");
+  };
+
+  const applyOdoo = (approved: boolean) => {
+    if (selectedCount > 10) {
+      const verb = approved ? "לאשר Odoo" : "לבטל Odoo";
+      const ok = window.confirm(`${verb} עבור ${selectedCount} אומנים?`);
+      if (!ok) return;
+    }
+    onApplyOdoo(approved);
+    setBulkOdoo("unchanged");
   };
 
   const panel = (
@@ -98,20 +117,24 @@ export function BulkActionsBar({
           </button>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 sm:col-span-2">
+          <SelectMenu
+            value={bulkOdoo}
+            options={odooOptions.map((o) => ({ value: o.value, label: o.label }))}
+            onChange={(v) => setBulkOdoo(v as OdooChoice)}
+            label="סטטוס Odoo"
+            className="min-w-0 flex-1"
+          />
           <button
             type="button"
-            className="flex-1 rounded-full bg-emerald-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-emerald-700"
-            onClick={() => onApplyOdoo(true)}
+            className="shrink-0 rounded-full bg-emerald-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+            disabled={bulkOdoo === "unchanged"}
+            onClick={() => {
+              if (bulkOdoo === "approve") applyOdoo(true);
+              else if (bulkOdoo === "revoke") applyOdoo(false);
+            }}
           >
-            ✓ אשר Odoo
-          </button>
-          <button
-            type="button"
-            className="flex-1 rounded-full border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50"
-            onClick={() => onApplyOdoo(false)}
-          >
-            ✗ בטל Odoo
+            Odoo
           </button>
         </div>
 
@@ -153,13 +176,15 @@ export function BulkActionsBar({
     </div>
   );
 
+  const bottomOffset = "bottom-[calc(3.5rem+var(--safe-bottom)+0.5rem)]";
+
   return (
     <>
-      {/* Mobile: collapsed chip */}
       <button
         type="button"
         className={cn(
-          "fixed bottom-4 inset-x-4 z-50 mx-auto flex max-w-md items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-lg md:hidden",
+          "fixed inset-x-4 z-[60] mx-auto flex max-w-md items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-lg md:hidden",
+          bottomOffset,
           expanded && "hidden",
         )}
         onClick={() => setExpanded(true)}
@@ -167,22 +192,25 @@ export function BulkActionsBar({
         {selectedCount.toLocaleString("he-IL")} נבחרו — פעולות ▲
       </button>
 
-      {/* Mobile: expanded sheet */}
       {expanded && (
-        <div className="fixed inset-0 z-[55] md:hidden" role="presentation">
+        <div className="fixed inset-0 z-[60] md:hidden" role="presentation">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setExpanded(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div
+            className={cn(
+              "absolute inset-x-0 max-h-[80dvh] overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl",
+              bottomOffset,
+            )}
+          >
             {panel}
           </div>
         </div>
       )}
 
-      {/* Desktop: inline bar */}
       <div
-        className="fixed bottom-4 inset-x-4 z-50 mx-auto hidden max-w-3xl rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur-md md:block"
+        className="fixed inset-x-4 z-[60] mx-auto hidden max-w-3xl rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur-md md:bottom-4 md:block"
         role="toolbar"
         aria-label="פעולות מרובות"
       >

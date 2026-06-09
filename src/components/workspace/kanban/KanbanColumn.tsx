@@ -149,6 +149,7 @@ export function KanbanColumn({
         className={cn(
           "kanban-scroll overflow-y-auto",
           isEmpty ? "min-h-[100px] flex-none" : "min-h-0 flex-1",
+          !desktop && !isEmpty && "min-h-[200px]",
         )}
       >
         {isEmpty ? (

@@ -179,6 +179,7 @@ export function KanbanBoard({
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className="flex min-h-0 flex-1 flex-col">
       {/* Mobile tabs */}
       <div className="mb-2 flex shrink-0 gap-2 lg:hidden" role="tablist">
         {grouped.map(({ status, meta, items }) => (
@@ -228,6 +229,8 @@ export function KanbanBoard({
             )}
           </div>
         ))}
+      </div>
+
       </div>
 
       <DragOverlay dropAnimation={null}>

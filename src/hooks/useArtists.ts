@@ -9,11 +9,21 @@ type ArtistsResponse = { artists: Artist[]; stats: ArtistStats };
 async function fetchArtists(q?: string): Promise<ArtistsResponse> {
   const params = q ? `?q=${encodeURIComponent(q)}` : "";
   const res = await fetch(`/api/artists${params}`);
-  if (!res.ok) throw new Error("טעינה נכשלה");
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || `טעינת אומנים נכשלה (${res.status})`);
+  }
   const data = (await res.json()) as ArtistsResponse;
   saveArtistsCache(q ?? "", data.artists, data.stats);
   return data;
 }
+
+export type CreateArtistInput = {
+  name: string;
+  status?: ArtistStatus;
+  handlerName?: string;
+  isOdooApproved?: boolean;
+};
 
 export function useArtists(search: string) {
   const queryClient = useQueryClient();
@@ -30,13 +40,17 @@ export function useArtists(search: string) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: async (input: CreateArtistInput | string) => {
+      const payload = typeof input === "string" ? { name: input } : input;
       const res = await fetch("/api/artists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("יצירה נכשלה");
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "יצירה נכשלה");
+      }
       return (await res.json()).artist as Artist;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
@@ -145,6 +159,9 @@ export function useArtists(search: string) {
     cacheAt: cached?.at ?? null,
     isLoading: artistsQuery.isLoading,
     isFetching: artistsQuery.isFetching,
+    isError: artistsQuery.isError,
+    error: artistsQuery.error,
+    refetch: artistsQuery.refetch,
     createArtist: createMutation.mutateAsync,
     updateArtist: updateMutation.mutateAsync,
     deleteArtist: deleteMutation.mutateAsync,

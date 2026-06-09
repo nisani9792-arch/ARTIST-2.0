@@ -18,7 +18,10 @@ export function ColumnResizeHandle({ onResize }: ColumnResizeHandleProps) {
       el.setPointerCapture(pointerId);
 
       const onMove = (ev: PointerEvent) => {
-        const delta = ev.clientX - startX.current;
+        let delta = ev.clientX - startX.current;
+        if (document.documentElement.dir === "rtl") {
+          delta = -delta;
+        }
         startX.current = ev.clientX;
         onResize(delta);
       };

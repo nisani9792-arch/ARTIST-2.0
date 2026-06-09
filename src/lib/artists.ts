@@ -67,16 +67,25 @@ export async function getArtistStats(): Promise<ArtistStats> {
   };
 }
 
-export async function createArtist(name: string): Promise<Artist> {
+export type CreateArtistInput = {
+  name: string;
+  status?: ArtistStatus;
+  handlerName?: string;
+  isOdooApproved?: boolean;
+};
+
+export async function createArtist(input: CreateArtistInput | string): Promise<Artist> {
+  const data = typeof input === "string" ? { name: input } : input;
+  const name = data.name.trim();
   const id = crypto.randomUUID();
   const [row] = await db
     .insert(artists)
     .values({
       id,
-      nameHe: name.trim(),
-      status: "unsigned",
-      owner: DEFAULT_HANDLER,
-      isOdooApproved: false,
+      nameHe: name,
+      status: data.status ?? "unsigned",
+      owner: data.handlerName?.trim() || DEFAULT_HANDLER,
+      isOdooApproved: data.isOdooApproved ?? false,
       songCount: 0,
       updatedAt: new Date().toISOString(),
     })

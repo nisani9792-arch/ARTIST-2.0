@@ -19,6 +19,9 @@ export async function GET(request: NextRequest) {
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "שם אומן נדרש"),
+  status: z.enum(["signed", "unsigned", "in_process"]).optional(),
+  handlerName: z.string().trim().min(1).optional(),
+  isOdooApproved: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -26,7 +29,7 @@ export async function POST(request: NextRequest) {
     const access = await requireAccess();
     if (!access.ok) return access.response;
     const body = createSchema.parse(await request.json());
-    const artist = await createArtist(body.name);
+    const artist = await createArtist(body);
     broadcastArtistsChanged();
     return NextResponse.json({ artist }, { status: 201 });
   } catch (error) {

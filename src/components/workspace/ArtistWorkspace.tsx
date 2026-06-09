@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { ArtistCreateModal } from "./ArtistCreateModal";
 import { ArtistDetailPanel } from "./ArtistDetailPanel";
 import { ArtistContextMenu } from "./ArtistContextMenu";
 import { ArtistsTable } from "./ArtistsTable";
@@ -24,6 +25,7 @@ import { useArtistsSync } from "@/hooks/useArtistsSync";
 import { useFolders } from "@/hooks/useFolders";
 import { InstallPrompt } from "@/components/m3/InstallPrompt";
 import { ServiceWorkerRegister } from "@/components/m3/ServiceWorkerRegister";
+import { countOdooPending } from "@/lib/artist-stats";
 import { formatHebrewDateTime } from "@/lib/format";
 import type { Artist, ArtistStatus } from "@/lib/types";
 import { useUiStore } from "@/stores";
@@ -47,6 +49,8 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     artist: Artist;
     position: { x: number; y: number };
   } | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [odooBulkBusy, setOdooBulkBusy] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
   const statusFilter = useUiStore((s) => s.statusFilter);
@@ -66,6 +70,9 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     stats,
     cacheAt,
     isLoading,
+    isError,
+    error,
+    refetch,
     createArtist,
     updateArtist,
     deleteArtist,
@@ -108,12 +115,14 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     return [...set].sort((a, b) => a.localeCompare(b, "he"));
   }, [allArtists]);
 
-  const odooPendingCount = useMemo(
-    () => allArtists.filter((a) => a.status === "signed" && !a.isOdooApproved).length,
-    [allArtists],
-  );
+  const odooPendingCount = useMemo(() => countOdooPending(allArtists), [allArtists]);
 
   const hideBoard = statusFilter === "unsigned";
+
+  const boardArtistsCount = useMemo(
+    () => artists.filter((a) => a.status === "in_process" || a.status === "signed").length,
+    [artists],
+  );
 
   const showToast = (message: string) => {
     setToast(message);
@@ -161,24 +170,32 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     setDetailArtist(artist);
   };
 
-  const handleQuickCreate = async () => {
-    const name = quickName.trim();
-    if (!name) return;
-    try {
-      await createArtist(name);
-      setQuickName("");
-      showToast(`נוצר: ${name}`);
-    } catch {
-      showToast("יצירה נכשלה");
-    }
+  const handleQuickCreate = () => {
+    setCreateOpen(true);
   };
 
   const handleAddArtist = () => {
-    const name = window.prompt("שם אומן חדש:");
-    if (name?.trim()) {
-      createArtist(name.trim())
-        .then(() => showToast(`נוצר: ${name.trim()}`))
-        .catch(() => showToast("יצירה נכשלה"));
+    setCreateOpen(true);
+  };
+
+  const handleCreateArtist = async (input: Parameters<typeof createArtist>[0]) => {
+    const artist = await createArtist(input);
+    showToast(`נוצר: ${artist.name}`);
+  };
+
+  const handleApproveAllOdoo = async () => {
+    const pending = allArtists.filter((a) => a.status === "signed" && !a.isOdooApproved);
+    if (pending.length === 0) return;
+    const ok = window.confirm(`לאשר Odoo עבור ${pending.length} אומנים חתומים?`);
+    if (!ok) return;
+    setOdooBulkBusy(true);
+    try {
+      await bulkUpdate({ ids: pending.map((a) => a.id), isOdooApproved: true });
+      showToast(`אושרו ${pending.length} אומנים ב-Odoo`);
+    } catch {
+      showToast("אישור Odoo נכשל");
+    } finally {
+      setOdooBulkBusy(false);
     }
   };
 
@@ -303,6 +320,24 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
         </div>
       )}
 
+      {isError && !offline && (
+        <div
+          className="flex flex-wrap items-center justify-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-center text-xs text-red-800"
+          role="alert"
+        >
+          <span>
+            טעינת אומנים נכשלה — {error instanceof Error ? error.message : "שגיאה לא ידועה"}
+          </span>
+          <button
+            type="button"
+            className="rounded-full bg-red-600 px-3 py-1 text-[10px] font-bold text-white hover:bg-red-700"
+            onClick={() => void refetch()}
+          >
+            נסה שוב
+          </button>
+        </div>
+      )}
+
       <div className="mx-auto flex h-full w-full max-w-[1600px] flex-col overflow-hidden">
         <WorkspaceToolbar
           operatorName={operatorName}
@@ -321,7 +356,17 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
           onClearSelection={() => setSelectedIds(new Set())}
         />
 
-        <OdooAlertBanner count={odooPendingCount} />
+        <OdooAlertBanner
+          count={odooPendingCount}
+          onApproveAll={handleApproveAllOdoo}
+          busy={odooBulkBusy}
+        />
+
+        {!isLoading && !isError && boardArtistsCount === 0 && vaultArtists.length > 0 && !vaultOpen && (
+          <div className="mx-3 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-center text-[11px] text-cyan-900 md:mx-4">
+            יש {vaultArtists.length} אומנים ב-Vault — לחץ Vault בתפריט התחתון
+          </div>
+        )}
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 md:gap-4 md:p-4">
           <StatusProgressBar stats={stats} />
@@ -456,6 +501,14 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
           {toast}
         </div>
       )}
+
+      <ArtistCreateModal
+        open={createOpen}
+        operatorName={operatorName}
+        handlers={handlers}
+        onClose={() => setCreateOpen(false)}
+        onCreate={handleCreateArtist}
+      />
 
       <ArtistDetailPanel
         artist={detailArtist}

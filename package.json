@@ -18,7 +18,10 @@
     "db:migrate-odoo": "py -3 scripts/migrate-odoo.py",
     "db:migrate-in-process": "node scripts/migrate-in-process.mjs",
     "db:migrate-song-count": "node scripts/migrate-song-count.mjs",
-    "db:migrate-legacy-fields": "node scripts/migrate-legacy-fields.mjs"
+    "db:migrate-legacy-fields": "node scripts/migrate-legacy-fields.mjs",
+    "db:migrate-all": "node scripts/migrate-all.mjs",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -45,7 +48,9 @@
     "drizzle-kit": "^0.30.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.2.0",
+    "@playwright/test": "^1.51.0",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.9"
   }
 }
