@@ -34,7 +34,7 @@ export function WorkspaceToolbar({
   onClearSelection,
 }: WorkspaceToolbarProps) {
   return (
-    <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200 bg-white/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200 bg-white/80 pt-safe backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <img

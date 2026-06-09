@@ -1,4 +1,4 @@
-import type { ArtistRow } from "./db/schema";
+import type { ArtistRow, FolderRow } from "./db/schema";
 
 export type ArtistStatus = "signed" | "unsigned" | "in_process";
 
@@ -9,7 +9,18 @@ export type Artist = {
   isOdooApproved: boolean;
   songCount: number;
   handlerName: string;
+  email: string;
+  notes: string;
+  tag: string;
+  folderId: string | null;
+  deletedAt: string | null;
   lastActionTimestamp: string;
+};
+
+export type Folder = {
+  id: string;
+  name: string;
+  updatedAt: string;
 };
 
 export type ArtistStats = {
@@ -35,9 +46,6 @@ export const normalizeStatus = (raw: string): ArtistStatus => {
   return "unsigned";
 };
 
-/** @deprecated use artist.status === "signed" */
-export const statusToSigned = (status: string): boolean => status === "signed";
-
 export const toArtist = (row: ArtistRow): Artist => ({
   id: row.id,
   name: row.nameHe,
@@ -45,5 +53,16 @@ export const toArtist = (row: ArtistRow): Artist => ({
   isOdooApproved: row.isOdooApproved,
   songCount: row.songCount ?? 0,
   handlerName: row.owner,
+  email: row.email ?? "",
+  notes: row.notes ?? "",
+  tag: row.tag ?? "",
+  folderId: row.folderId ?? null,
+  deletedAt: row.deletedAt ?? null,
   lastActionTimestamp: row.updatedAt,
+});
+
+export const toFolder = (row: FolderRow): Folder => ({
+  id: row.id,
+  name: row.name,
+  updatedAt: row.updatedAt,
 });

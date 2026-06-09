@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { updateArtist } from "@/lib/artists";
+import { broadcastArtistsChanged } from "@/lib/artists-events";
+import { softDeleteArtist, updateArtist } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
 
 const patchSchema = z.object({
@@ -9,6 +10,11 @@ const patchSchema = z.object({
   isOdooApproved: z.boolean().optional(),
   songCount: z.number().int().min(0).optional(),
   handlerName: z.string().trim().min(1).optional(),
+  email: z.string().optional(),
+  notes: z.string().optional(),
+  tag: z.string().optional(),
+  folderId: z.string().nullable().optional(),
+  deletedAt: z.string().nullable().optional(),
 });
 
 export async function PATCH(
@@ -26,6 +32,7 @@ export async function PATCH(
       return NextResponse.json({ error: "אומן לא נמצא" }, { status: 404 });
     }
 
+    broadcastArtistsChanged();
     return NextResponse.json({ artist });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -33,5 +40,25 @@ export async function PATCH(
     }
     console.error(error);
     return NextResponse.json({ error: "שגיאה בעדכון אומן" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const access = await requireAccess();
+    if (!access.ok) return access.response;
+    const { id } = await params;
+    const artist = await softDeleteArtist(id);
+    if (!artist) {
+      return NextResponse.json({ error: "אומן לא נמצא" }, { status: 404 });
+    }
+    broadcastArtistsChanged();
+    return NextResponse.json({ artist });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "שגיאה במחיקה" }, { status: 500 });
   }
 }

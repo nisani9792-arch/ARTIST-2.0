@@ -1,5 +1,5 @@
-const CACHE = "artist20-v1";
-const PRECACHE = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/logo.png"];
+const CACHE = "artist20-1780983561097";
+const PRECACHE = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/logo.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
@@ -20,6 +20,23 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.pathname.startsWith("/api/")) return;
 
+  // Navigation: network-first
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request)),
+    );
+    return;
+  }
+
+  // Static assets: stale-while-revalidate
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request)
@@ -31,6 +48,7 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => cached);
+
       return cached || fetchPromise;
     }),
   );

@@ -10,7 +10,17 @@ type ArtistDetailPanelProps = {
   onClose: () => void;
   onSave: (
     patch: Partial<
-      Pick<Artist, "name" | "handlerName" | "status" | "isOdooApproved" | "songCount">
+      Pick<
+        Artist,
+        | "name"
+        | "handlerName"
+        | "status"
+        | "isOdooApproved"
+        | "songCount"
+        | "email"
+        | "notes"
+        | "tag"
+      >
     >,
   ) => Promise<void>;
 };
@@ -21,6 +31,9 @@ export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanel
   const [status, setStatus] = useState<ArtistStatus>("unsigned");
   const [isOdooApproved, setIsOdooApproved] = useState(false);
   const [songCount, setSongCount] = useState("0");
+  const [email, setEmail] = useState("");
+  const [notes, setNotes] = useState("");
+  const [tag, setTag] = useState("");
   const [busy, setBusy] = useState(false);
 
   const statusOptions = useMemo(
@@ -39,6 +52,9 @@ export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanel
     setStatus(artist.status);
     setIsOdooApproved(artist.isOdooApproved);
     setSongCount(String(artist.songCount ?? 0));
+    setEmail(artist.email);
+    setNotes(artist.notes);
+    setTag(artist.tag);
   }, [artist]);
 
   if (!artist) return null;
@@ -52,6 +68,9 @@ export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanel
         status,
         isOdooApproved,
         songCount: Math.max(0, Number.parseInt(songCount, 10) || 0),
+        email: email.trim(),
+        notes,
+        tag: tag.trim(),
       });
       onClose();
     } finally {
@@ -104,6 +123,25 @@ export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanel
           </label>
 
           <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-gray-500">אימייל</span>
+            <input
+              type="email"
+              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-gray-500">תגית</span>
+            <input
+              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1">
             <span className="text-[10px] font-bold text-gray-500">סטטוס</span>
             <SelectMenu
               value={status}
@@ -122,6 +160,16 @@ export function ArtistDetailPanel({ artist, onClose, onSave }: ArtistDetailPanel
               className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500"
               value={songCount}
               onChange={(e) => setSongCount(e.target.value)}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-gray-500">הערות</span>
+            <textarea
+              rows={3}
+              className="resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
           </label>
 

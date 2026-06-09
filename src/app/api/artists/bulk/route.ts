@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { broadcastArtistsChanged } from "@/lib/artists-events";
 import { bulkUpdateArtists } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
 
@@ -22,6 +23,7 @@ export async function PATCH(request: NextRequest) {
       isOdooApproved: body.isOdooApproved,
       songCount: body.songCount,
     });
+    broadcastArtistsChanged();
     return NextResponse.json({ artists, count: artists.length });
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -33,6 +33,7 @@ export type ArtistCardProps = {
   selected: boolean;
   onSelect: (event: MouseEvent) => void;
   onOpenDetail: () => void;
+  onContextMenu?: (event: MouseEvent) => void;
   draggable?: boolean;
 };
 
@@ -41,6 +42,7 @@ export const ArtistCard = memo(function ArtistCard({
   selected,
   onSelect,
   onOpenDetail,
+  onContextMenu,
   draggable = true,
 }: ArtistCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -66,6 +68,10 @@ export const ArtistCard = memo(function ArtistCard({
       onDoubleClick={(e) => {
         e.preventDefault();
         onOpenDetail();
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu?.(e);
       }}
       title={artist.name}
       className={cn(

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { loadArtistsCache, saveArtistsCache } from "@/lib/artists-cache";
 import type { Artist, ArtistStats, ArtistStatus } from "@/lib/types";
 
 type ArtistsResponse = { artists: Artist[]; stats: ArtistStats };
@@ -9,15 +10,23 @@ async function fetchArtists(q?: string): Promise<ArtistsResponse> {
   const params = q ? `?q=${encodeURIComponent(q)}` : "";
   const res = await fetch(`/api/artists${params}`);
   if (!res.ok) throw new Error("טעינה נכשלה");
-  return res.json();
+  const data = (await res.json()) as ArtistsResponse;
+  saveArtistsCache(q ?? "", data.artists, data.stats);
+  return data;
 }
 
 export function useArtists(search: string) {
   const queryClient = useQueryClient();
+  const cached = loadArtistsCache(search);
 
   const artistsQuery = useQuery({
     queryKey: ["artists", search],
     queryFn: () => fetchArtists(search || undefined),
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    placeholderData: cached
+      ? { artists: cached.artists, stats: cached.stats }
+      : undefined,
   });
 
   const createMutation = useMutation({
@@ -39,7 +48,21 @@ export function useArtists(search: string) {
       patch,
     }: {
       id: string;
-      patch: Partial<Pick<Artist, "name" | "status" | "isOdooApproved" | "songCount" | "handlerName">>;
+      patch: Partial<
+        Pick<
+          Artist,
+          | "name"
+          | "status"
+          | "isOdooApproved"
+          | "songCount"
+          | "handlerName"
+          | "email"
+          | "notes"
+          | "tag"
+          | "folderId"
+          | "deletedAt"
+        >
+      >;
     }) => {
       const res = await fetch(`/api/artists/${id}`, {
         method: "PATCH",
@@ -93,6 +116,15 @@ export function useArtists(search: string) {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/artists/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("מחיקה נכשלה");
+      return (await res.json()).artist as Artist;
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),
+  });
+
   const commandMutation = useMutation({
     mutationFn: async (command: string) => {
       const res = await fetch("/api/ai/command", {
@@ -108,11 +140,14 @@ export function useArtists(search: string) {
   });
 
   return {
-    artists: artistsQuery.data?.artists ?? [],
-    stats: artistsQuery.data?.stats,
+    artists: artistsQuery.data?.artists ?? cached?.artists ?? [],
+    stats: artistsQuery.data?.stats ?? cached?.stats,
+    cacheAt: cached?.at ?? null,
     isLoading: artistsQuery.isLoading,
+    isFetching: artistsQuery.isFetching,
     createArtist: createMutation.mutateAsync,
     updateArtist: updateMutation.mutateAsync,
+    deleteArtist: deleteMutation.mutateAsync,
     bulkUpdate: bulkMutation.mutateAsync,
     runCommand: commandMutation.mutateAsync,
     commandMessage: commandMutation.data?.message,

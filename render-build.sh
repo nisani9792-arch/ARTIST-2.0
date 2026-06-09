@@ -9,8 +9,9 @@ echo "==> Installing dependencies..."
 npm ci
 
 if [ -n "${DATABASE_URL:-}${ARTIST_DATABASE_URL:-}" ]; then
-  echo "==> DB migrations (song_count)..."
+  echo "==> DB migrations..."
   npm run db:migrate-song-count || echo "WARN: song_count migration skipped"
+  npm run db:migrate-legacy-fields || echo "WARN: legacy fields migration skipped"
 fi
 
 echo "==> Building Next.js..."

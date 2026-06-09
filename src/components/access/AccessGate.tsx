@@ -41,5 +41,11 @@ export function AccessGate() {
     );
   }
 
-  return <ArtistWorkspace operatorName={operatorName} offline={phase === "offline"} />;
+  return (
+    <ArtistWorkspace
+      operatorName={operatorName}
+      offline={phase === "offline"}
+      degraded={phase === "degraded"}
+    />
+  );
 }

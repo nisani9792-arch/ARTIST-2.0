@@ -16,8 +16,26 @@ import {
 
 const RESET_MS = 1600;
 const REQUIRED_PRESSES = 3;
+const MAX_RETRIES = 2;
 
-export type AccessPhase = "loading" | "locked" | "register" | "ready" | "offline";
+export type AccessPhase = "loading" | "locked" | "register" | "ready" | "offline" | "degraded";
+
+const isBrowserOffline = () =>
+  typeof navigator !== "undefined" && navigator.onLine === false;
+
+async function fetchWithRetry(): Promise<Awaited<ReturnType<typeof fetchAccessStatus>>> {
+  let lastError: unknown;
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    try {
+      return await fetchAccessStatus();
+    } catch (err) {
+      lastError = err;
+      if (isBrowserOffline()) throw err;
+      await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+    }
+  }
+  throw lastError;
+}
 
 export function useAccessGate() {
   const [phase, setPhase] = useState<AccessPhase>("loading");
@@ -29,7 +47,7 @@ export function useAccessGate() {
     const cached = getStoredOperatorName();
 
     try {
-      const next = await fetchAccessStatus();
+      const next = await fetchWithRetry();
       if (next.state === "ready") {
         markTrustedDevice();
         setOperatorName(next.operatorName);
@@ -47,13 +65,17 @@ export function useAccessGate() {
       setOperatorName(cached);
       setPhase("locked");
     } catch {
-      if (cached) {
-        setOperatorName(cached);
-        setPhase("offline");
+      if (!cached) {
+        setOperatorName(null);
+        setPhase("locked");
         return;
       }
-      setOperatorName(null);
-      setPhase("locked");
+      setOperatorName(cached);
+      if (isBrowserOffline()) {
+        setPhase("offline");
+      } else {
+        setPhase("degraded");
+      }
     }
   }, []);
 

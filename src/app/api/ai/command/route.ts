@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { broadcastArtistsChanged } from "@/lib/artists-events";
 import {
   bulkUpdateArtists,
   listArtists,
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
         break;
     }
 
+    if (affected > 0) broadcastArtistsChanged();
     return NextResponse.json({ ok: true, affected, message, action: parsed.action });
   } catch (error) {
     if (error instanceof z.ZodError) {

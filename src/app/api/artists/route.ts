@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { broadcastArtistsChanged } from "@/lib/artists-events";
 import { createArtist, getArtistStats, listArtists } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
 
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
     if (!access.ok) return access.response;
     const body = createSchema.parse(await request.json());
     const artist = await createArtist(body.name);
+    broadcastArtistsChanged();
     return NextResponse.json({ artist }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

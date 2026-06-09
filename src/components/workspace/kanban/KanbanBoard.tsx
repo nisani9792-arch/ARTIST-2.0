@@ -10,6 +10,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useCallback, useRef, useState, type MouseEvent } from "react";
+import { cn } from "@/lib/cn";
 import { STATUS_META, type Artist, type ArtistStatus } from "@/lib/types";
 import { useUiStore, type BoardColumnStatus } from "@/stores/useUiStore";
 import { selectRangeInColumn } from "./selection";
@@ -24,6 +25,8 @@ export type KanbanBoardProps = {
   onSetSelection: (ids: string[]) => void;
   onOpenDetail: (artist: Artist) => void;
   onBulkStatusChange: (ids: string[], status: ArtistStatus) => void;
+  onContextMenu?: (artist: Artist, event: MouseEvent) => void;
+  hideBoard?: boolean;
 };
 
 const isBoardColumn = (status: ArtistStatus): status is BoardColumnStatus =>
@@ -36,6 +39,8 @@ export function KanbanBoard({
   onSetSelection,
   onOpenDetail,
   onBulkStatusChange,
+  onContextMenu,
+  hideBoard = false,
 }: KanbanBoardProps) {
   const [activeArtist, setActiveArtist] = useState<Artist | null>(null);
   const [activeColumn, setActiveColumn] = useState<BoardColumnStatus | null>(null);
@@ -44,7 +49,8 @@ export function KanbanBoard({
 
   const columnOrder = useUiStore((s) => s.columnOrder);
   const columnWidths = useUiStore((s) => s.columnWidths);
-  const moveColumn = useUiStore((s) => s.moveColumn);
+  const mobileBoardTab = useUiStore((s) => s.mobileBoardTab);
+  const setMobileBoardTab = useUiStore((s) => s.setMobileBoardTab);
   const setColumnOrder = useUiStore((s) => s.setColumnOrder);
   const resizeAdjacentColumns = useUiStore((s) => s.resizeAdjacentColumns);
 
@@ -62,6 +68,8 @@ export function KanbanBoard({
     items: boardArtists.filter((a) => a.status === status),
     widthPct: columnWidths[status],
   }));
+
+  const mobileColumn = grouped.find((g) => g.status === mobileBoardTab) ?? grouped[0];
 
   const handleSelect = useCallback(
     (columnArtists: Artist[], artist: Artist, event: MouseEvent) => {
@@ -136,28 +144,81 @@ export function KanbanBoard({
     resizeAdjacentColumns(left, right, deltaPct);
   };
 
+  const renderColumn = (
+    status: BoardColumnStatus,
+    label: string,
+    items: Artist[],
+    widthPct: number,
+    desktop: boolean,
+    hideHeader?: boolean,
+  ) => (
+    <KanbanColumn
+      key={`${status}-${desktop ? "d" : "m"}`}
+      status={status}
+      label={label}
+      artists={items}
+      selectedIds={selectedIds}
+      widthPct={widthPct}
+      desktop={desktop}
+      hideHeader={hideHeader}
+      onSelectArtist={(artist, event) => handleSelect(items, artist, event)}
+      onOpenDetail={onOpenDetail}
+      onContextMenu={onContextMenu}
+      onSelectAll={(checked) => handleSelectAllInCol(status, checked)}
+    />
+  );
+
+  if (hideBoard) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-8 text-center">
+        <p className="text-sm font-bold text-slate-700">כל האומנים ב-Vault</p>
+        <p className="text-xs text-gray-500">פתח את ה-Vault מהתפריט התחתון לצפייה ועריכה</p>
+      </div>
+    );
+  }
+
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div
-        ref={boardRef}
-        className="kanban-scroll flex min-h-0 flex-1 gap-2 overflow-x-auto snap-x snap-mandatory pb-1 md:gap-0 md:overflow-x-hidden md:pb-0"
-      >
+      {/* Mobile tabs */}
+      <div className="mb-2 flex shrink-0 gap-2 lg:hidden" role="tablist">
+        {grouped.map(({ status, meta, items }) => (
+          <button
+            key={status}
+            type="button"
+            role="tab"
+            aria-selected={mobileBoardTab === status}
+            className={cn(
+              "flex-1 rounded-full px-3 py-2 text-xs font-bold transition",
+              mobileBoardTab === status
+                ? status === "signed"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "bg-amber-500 text-white shadow-sm"
+                : "border border-slate-200 bg-white text-slate-600",
+            )}
+            onClick={() => setMobileBoardTab(status)}
+          >
+            {meta.label} ({items.length.toLocaleString("he-IL")})
+          </button>
+        ))}
+      </div>
+
+      {/* Mobile: single column */}
+      <div className="flex min-h-0 flex-1 lg:hidden">
+        {mobileColumn &&
+          renderColumn(
+            mobileColumn.status,
+            mobileColumn.meta.label,
+            mobileColumn.items,
+            100,
+            false,
+          )}
+      </div>
+
+      {/* Desktop: two columns + resize */}
+      <div ref={boardRef} className="hidden min-h-0 flex-1 gap-0 lg:flex">
         {grouped.map(({ status, meta, items, widthPct }, index) => (
-          <div key={status} className="flex min-h-0 shrink-0 md:min-w-0 md:shrink md:flex-1">
-            <KanbanColumn
-              status={status}
-              label={meta.label}
-              artists={items}
-              selectedIds={selectedIds}
-              widthPct={widthPct}
-              canMoveEarlier={index > 0}
-              canMoveLater={index < grouped.length - 1}
-              onMoveEarlier={() => moveColumn(status, -1)}
-              onMoveLater={() => moveColumn(status, 1)}
-              onSelectArtist={(artist, event) => handleSelect(items, artist, event)}
-              onOpenDetail={onOpenDetail}
-              onSelectAll={(checked) => handleSelectAllInCol(status, checked)}
-            />
+          <div key={status} className="flex min-h-0 min-w-0 flex-1">
+            {renderColumn(status, meta.label, items, widthPct, true)}
             {index < grouped.length - 1 && (
               <ColumnResizeHandle
                 onResize={(deltaPx) =>

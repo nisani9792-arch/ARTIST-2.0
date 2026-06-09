@@ -24,13 +24,16 @@ export type KanbanColumnProps = {
   label: string;
   artists: Artist[];
   selectedIds: Set<string>;
-  widthPct: number;
-  canMoveEarlier: boolean;
-  canMoveLater: boolean;
-  onMoveEarlier: () => void;
-  onMoveLater: () => void;
+  widthPct?: number;
+  desktop?: boolean;
+  hideHeader?: boolean;
+  canMoveEarlier?: boolean;
+  canMoveLater?: boolean;
+  onMoveEarlier?: () => void;
+  onMoveLater?: () => void;
   onSelectArtist: (artist: Artist, event: MouseEvent) => void;
   onOpenDetail: (artist: Artist) => void;
+  onContextMenu?: (artist: Artist, event: MouseEvent) => void;
   onSelectAll: (checked: boolean) => void;
 };
 
@@ -40,12 +43,15 @@ export function KanbanColumn({
   artists,
   selectedIds,
   widthPct,
-  canMoveEarlier,
-  canMoveLater,
+  desktop = false,
+  hideHeader = false,
+  canMoveEarlier = false,
+  canMoveLater = false,
   onMoveEarlier,
   onMoveLater,
   onSelectArtist,
   onOpenDetail,
+  onContextMenu,
   onSelectAll,
 }: KanbanColumnProps) {
   const { setNodeRef: setDropRef, isOver } = useDroppable({
@@ -67,6 +73,7 @@ export function KanbanColumn({
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isEmpty = artists.length === 0;
 
   const virtualizer = useVirtualizer({
     count: artists.length,
@@ -85,62 +92,47 @@ export function KanbanColumn({
   return (
     <section
       ref={setRefs}
-      style={{ flex: `0 0 ${widthPct}%` }}
+      style={desktop && widthPct ? { flex: `0 0 ${widthPct}%` } : undefined}
       className={cn(
-        "flex min-h-0 w-[min(88vw,320px)] shrink-0 snap-center flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-3",
-        "transition-colors duration-200 md:w-auto md:min-w-[160px] md:max-w-[78%] md:snap-align-none",
+        "flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50/90 p-3 shadow-inner",
+        desktop ? "min-h-0 min-w-[160px] max-w-[78%] flex-1" : "h-full min-h-0 w-full flex-1",
         isOver && "border-cyan-400 bg-cyan-50/40 ring-2 ring-cyan-200",
         isColumnOver && "ring-2 ring-blue-300",
         isColumnDragging && "opacity-60",
+        isEmpty && !desktop && "min-h-0",
       )}
     >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 pb-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <button
-            type="button"
-            ref={setDragRef}
-            {...dragAttrs}
-            {...dragListeners}
-            className="hidden shrink-0 cursor-grab rounded-md px-1 py-0.5 text-[10px] text-gray-400 hover:bg-white active:cursor-grabbing md:inline"
-            aria-label={`גרור לשינוי מיקום עמודת ${label}`}
-            title="גרור לשינוי סדר"
-          >
-            ⋮⋮
-          </button>
-          <span className={cn("size-1.5 shrink-0 rounded-full", columnDot[status])} aria-hidden />
-          <h2
-            className={cn(
-              "truncate text-xs font-extrabold text-slate-800",
-              columnHeaderAccent[status],
+      {!hideHeader && (
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 pb-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {desktop && (
+              <button
+                type="button"
+                ref={setDragRef}
+                {...dragAttrs}
+                {...dragListeners}
+                className="shrink-0 cursor-grab rounded-md px-1 py-0.5 text-[10px] text-gray-400 hover:bg-white active:cursor-grabbing"
+                aria-label={`גרור לשינוי מיקום עמודת ${label}`}
+                title="גרור לשינוי סדר"
+              >
+                ⋮⋮
+              </button>
             )}
-          >
-            {label}
-          </h2>
-          <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-gray-500 shadow-sm">
-            {artists.length.toLocaleString("he-IL")}
-          </span>
-        </div>
+            <span className={cn("size-1.5 shrink-0 rounded-full", columnDot[status])} aria-hidden />
+            <h2
+              className={cn(
+                "truncate text-xs font-extrabold text-slate-800",
+                columnHeaderAccent[status],
+              )}
+            >
+              {label}
+            </h2>
+            <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-gray-500 shadow-sm">
+              {artists.length.toLocaleString("he-IL")}
+            </span>
+          </div>
 
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            disabled={!canMoveEarlier}
-            onClick={onMoveEarlier}
-            className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 disabled:opacity-30 md:hidden"
-            aria-label="הזז עמודה"
-          >
-            →
-          </button>
-          <button
-            type="button"
-            disabled={!canMoveLater}
-            onClick={onMoveLater}
-            className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 disabled:opacity-30 md:hidden"
-            aria-label="הזז עמודה"
-          >
-            ←
-          </button>
-          <label className="flex cursor-pointer items-center gap-1 text-[10px] font-medium text-gray-500">
+          <label className="flex shrink-0 cursor-pointer items-center gap-1 text-[10px] font-medium text-gray-500">
             <input
               type="checkbox"
               checked={allSelected}
@@ -149,12 +141,24 @@ export function KanbanColumn({
             />
             הכל
           </label>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <div ref={scrollRef} className="kanban-scroll min-h-0 flex-1 overflow-y-auto">
-        {artists.length === 0 ? (
-          <p className="py-6 text-center text-[10px] text-gray-500">אין אומנים בעמודה</p>
+      <div
+        ref={scrollRef}
+        className={cn(
+          "kanban-scroll overflow-y-auto",
+          isEmpty ? "min-h-[100px] flex-none" : "min-h-0 flex-1",
+        )}
+      >
+        {isEmpty ? (
+          <div className="flex flex-col items-center justify-center gap-1 py-6 text-center">
+            <span className="text-lg opacity-40" aria-hidden>
+              📋
+            </span>
+            <p className="text-[10px] font-medium text-gray-500">אין אומנים בעמודה</p>
+            <p className="text-[9px] text-gray-400">גרור אומן לכאן לשינוי סטטוס</p>
+          </div>
         ) : (
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((row) => {
@@ -173,6 +177,7 @@ export function KanbanColumn({
                     selected={selectedIds.has(artist.id)}
                     onSelect={(event) => onSelectArtist(artist, event)}
                     onOpenDetail={() => onOpenDetail(artist)}
+                    onContextMenu={(event) => onContextMenu?.(artist, event)}
                   />
                 </div>
               );

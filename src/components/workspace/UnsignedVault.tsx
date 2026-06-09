@@ -34,15 +34,8 @@ export function UnsignedVault({
   if (!vaultOpen) {
     return (
       <>
-        <button
-          type="button"
-          className="fixed bottom-20 start-4 z-30 rounded-full border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-600 shadow-md md:hidden"
-          onClick={toggleVault}
-        >
-          Vault ({artists.length})
-        </button>
         <aside
-          className="hidden w-11 shrink-0 cursor-pointer flex-col items-center rounded-3xl border border-slate-200 bg-slate-50 py-4 transition hover:border-cyan-300 hover:bg-cyan-50/50 md:flex"
+          className="hidden w-11 shrink-0 cursor-pointer flex-col items-center rounded-3xl border border-slate-200 bg-slate-50 py-4 transition hover:border-cyan-300 hover:bg-cyan-50/50 lg:flex"
           onClick={toggleVault}
           title="Unsigned Vault"
           role="button"
@@ -63,7 +56,7 @@ export function UnsignedVault({
   return (
     <>
       <div
-        className="fixed inset-0 z-[44] bg-slate-900/40 backdrop-blur-sm md:hidden"
+        className="fixed inset-0 z-[44] bg-slate-900/40 backdrop-blur-sm lg:hidden"
         onClick={toggleVault}
         role="presentation"
       />
@@ -71,7 +64,7 @@ export function UnsignedVault({
         className={cn(
           "z-[45] flex flex-col gap-3 border border-slate-200 bg-slate-50 p-3 shadow-2xl",
           "fixed inset-x-0 bottom-0 max-h-[75dvh] rounded-t-3xl",
-          "md:static md:max-h-none md:w-64 md:shrink-0 md:rounded-3xl md:shadow-none",
+          "lg:static lg:max-h-none lg:w-64 lg:shrink-0 lg:rounded-3xl lg:shadow-none",
         )}
       >
         <header className="flex items-center justify-between gap-2 border-b border-slate-200/80 pb-2">

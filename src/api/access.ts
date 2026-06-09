@@ -58,12 +58,16 @@ export const registerOperator = async (operatorName: string): Promise<string> =>
   return name;
 };
 
-/** Auto-sync saved name with server; offline fallback on refresh only. */
+const isBrowserOffline = () =>
+  typeof navigator !== "undefined" && navigator.onLine === false;
+
+/** Auto-sync saved name with server; offline only when browser is offline. */
 export const enterWithSavedOperator = async (
   cachedName: string,
 ): Promise<
   | { state: "ready"; operatorName: string }
   | { state: "offline"; operatorName: string }
+  | { state: "degraded"; operatorName: string }
 > => {
   try {
     const name = await registerOperator(cachedName);
@@ -71,7 +75,10 @@ export const enterWithSavedOperator = async (
     return { state: "ready", operatorName: name };
   } catch {
     markTrustedDevice();
-    return { state: "offline", operatorName: cachedName };
+    if (isBrowserOffline()) {
+      return { state: "offline", operatorName: cachedName };
+    }
+    return { state: "degraded", operatorName: cachedName };
   }
 };
 

@@ -7,7 +7,7 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 
-/** Maps to existing Neon `artists` table (ARTIST v1 schema + is_odoo_approved). */
+/** Maps to existing Neon `artists` table. */
 export const artists = pgTable(
   "artists",
   {
@@ -17,6 +17,11 @@ export const artists = pgTable(
     owner: text("owner").notNull().default("לא שויך"),
     isOdooApproved: boolean("is_odoo_approved").notNull().default(false),
     songCount: integer("song_count").notNull().default(0),
+    email: text("email"),
+    notes: text("notes"),
+    tag: text("tag"),
+    folderId: text("folder_id"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "string" }),
     updatedAt: timestamp("updated_at", {
       withTimezone: true,
       mode: "string",
@@ -29,11 +34,22 @@ export const artists = pgTable(
     index("artists_owner_idx").on(table.owner),
     index("artists_name_he_idx").on(table.nameHe),
     index("artists_updated_at_idx").on(table.updatedAt),
+    index("artists_folder_id_idx").on(table.folderId),
+    index("artists_deleted_at_idx").on(table.deletedAt),
   ],
 );
 
+export const folders = pgTable("folders", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .notNull()
+    .defaultNow(),
+});
+
 export type ArtistRow = typeof artists.$inferSelect;
 export type NewArtistRow = typeof artists.$inferInsert;
+export type FolderRow = typeof folders.$inferSelect;
 
 export const ipAccess = pgTable("ip_access", {
   ip: text("ip").primaryKey(),
