@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
 import { createArtist, getArtistStats, listArtists } from "@/lib/artists";
+import { runMigrations } from "@/lib/db/migrate";
 import { requireAccess } from "@/lib/access/require-access";
 
 export async function GET(request: NextRequest) {
   try {
     const access = await requireAccess();
     if (!access.ok) return access.response;
+    await runMigrations();
     const q = request.nextUrl.searchParams.get("q") ?? undefined;
     const [artists, stats] = await Promise.all([listArtists(q), getArtistStats()]);
     return NextResponse.json({ artists, stats });

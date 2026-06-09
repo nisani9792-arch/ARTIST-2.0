@@ -1,6 +1,7 @@
 import { isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { runMigrations } from "@/lib/db/migrate";
 import { artists } from "@/lib/db/schema";
 
 const REQUIRED_COLUMNS = [
@@ -12,6 +13,7 @@ const REQUIRED_COLUMNS = [
 
 export async function GET() {
   try {
+    await runMigrations();
     await db.execute(sql`SELECT 1`);
 
     const columnRows = await db.execute<{ column_name: string }>(sql`
