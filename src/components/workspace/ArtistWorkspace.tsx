@@ -167,15 +167,25 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
   const handleBulkStatusChange = useCallback(
     async (ids: string[], status: ArtistStatus) => {
       try {
-        await bulkUpdate({ ids, status });
+        if (ids.length === 1) {
+          await updateArtist({ id: ids[0], patch: { status } });
+        } else {
+          await bulkUpdate({ ids, status });
+        }
         showToast(`עודכנו ${ids.length} אומנים`);
         setSelectedIds(new Set());
       } catch {
         showToast("עדכון סטטוס נכשל");
       }
     },
-    [bulkUpdate],
+    [bulkUpdate, updateArtist],
   );
+
+  const handleExportColumn = useCallback((status: ArtistStatus) => {
+    const params = new URLSearchParams({ scope: "all", status });
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    window.open(`/api/artists/export?${params}`, "_blank");
+  }, [debouncedSearch]);
 
   const openArtist = (artist: Artist) => {
     setQuickEditArtistId(artist.id);
@@ -486,17 +496,8 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
                   onSetSelection={setSelection}
                   onOpenDetail={openArtist}
                   onBulkStatusChange={handleBulkStatusChange}
+                  onExportColumn={handleExportColumn}
                   onContextMenu={handleContextMenu}
-                  foldersSlot={
-                    <FoldersPanel
-                      folders={folders}
-                      activeFolderId={activeFolderId}
-                      onSelectFolder={setActiveFolderId}
-                      onCreateFolder={(name) => {
-                        void createFolder(name).then(() => showToast(`נוצרה תיקייה: ${name}`));
-                      }}
-                    />
-                  }
                   quickEditSlot={
                     <QuickEditPanel
                       artist={quickEditArtist}
@@ -588,7 +589,11 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
 
       <CommandMenu
         artists={allArtists}
-        onStatusChange={(id, status) => void handleBulkStatusChange([id], status)}
+        onStatusChange={(id, status) => {
+          void updateArtist({ id, patch: { status } }).then(() =>
+            showToast(`סטטוס עודכן ל-${status === "signed" ? "חתום" : status === "in_process" ? "בעבודה" : "לא חתום"}`),
+          ).catch(() => showToast("עדכון סטטוס נכשל"));
+        }}
         onOdooChange={(id, approved) => {
           void updateArtist({ id, patch: { isOdooApproved: approved } });
           showToast(approved ? "אושר Odoo" : "בוטל Odoo");

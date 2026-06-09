@@ -64,41 +64,47 @@ export function BulkActionsBar({
   };
 
   const panel = (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold text-slate-700">
-          {selectedCount.toLocaleString("he-IL")} נבחרו
-        </span>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3 border-b border-slate-200/70 pb-3">
+        <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 text-sm font-extrabold text-white shadow-md">
+          {selectedCount > 99 ? "99+" : selectedCount}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-extrabold text-slate-900">פעולות מרובות</p>
+          <p className="text-[11px] text-slate-500">
+            {selectedCount.toLocaleString("he-IL")} אומנים נבחרו
+          </p>
+        </div>
         <button
           type="button"
-          className="ms-auto rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-500 md:hidden"
+          className="rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-500 md:hidden"
           onClick={() => setExpanded(false)}
         >
           סגור
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200/70 bg-slate-50/50 p-2">
           <SelectMenu
             value={bulkStatus}
             options={statusOptions}
             onChange={(v) => setBulkStatus(v as ArtistStatus)}
-            label="סטטוס מרוכז"
+            label="סטטוס"
             className="min-w-0 flex-1"
           />
           <button
             type="button"
-            className="shrink-0 rounded-full bg-blue-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-blue-700"
+            className="shrink-0 rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 px-3 py-2 text-[10px] font-bold text-white shadow-sm"
             onClick={() => onApplyStatus(bulkStatus)}
           >
             עדכן
           </button>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200/70 bg-slate-50/50 p-2">
           <input
-            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-xs outline-none focus:ring-2 focus:ring-cyan-500"
+            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs outline-none focus:ring-2 focus:ring-cyan-400/50"
             placeholder="גורם מטפל"
             list="bulk-handlers-list"
             value={bulkHandler}
@@ -106,7 +112,7 @@ export function BulkActionsBar({
           />
           <button
             type="button"
-            className="shrink-0 rounded-full bg-cyan-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-cyan-700 disabled:opacity-40"
+            className="shrink-0 rounded-full bg-cyan-600 px-3 py-2 text-[10px] font-bold text-white disabled:opacity-40"
             disabled={!bulkHandler.trim()}
             onClick={() => {
               onApplyHandler(bulkHandler.trim());
@@ -117,17 +123,17 @@ export function BulkActionsBar({
           </button>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2 sm:col-span-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200/70 bg-slate-50/50 p-2 sm:col-span-2">
           <SelectMenu
             value={bulkOdoo}
             options={odooOptions.map((o) => ({ value: o.value, label: o.label }))}
             onChange={(v) => setBulkOdoo(v as OdooChoice)}
-            label="סטטוס Odoo"
+            label="Odoo"
             className="min-w-0 flex-1"
           />
           <button
             type="button"
-            className="shrink-0 rounded-full bg-emerald-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
+            className="shrink-0 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-500 px-3 py-2 text-[10px] font-bold text-white disabled:opacity-40"
             disabled={bulkOdoo === "unchanged"}
             onClick={() => {
               if (bulkOdoo === "approve") applyOdoo(true);
@@ -138,12 +144,12 @@ export function BulkActionsBar({
           </button>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200/70 bg-slate-50/50 p-2">
           <input
             type="number"
             min={0}
             inputMode="numeric"
-            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-400/50"
             placeholder="כמות שירים"
             value={songCount}
             onChange={(e) => setSongCount(e.target.value)}
@@ -151,7 +157,7 @@ export function BulkActionsBar({
           />
           <button
             type="button"
-            className="shrink-0 rounded-full bg-blue-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-blue-700 disabled:opacity-40"
+            className="shrink-0 rounded-full bg-blue-600 px-3 py-2 text-[10px] font-bold text-white disabled:opacity-40"
             disabled={songCount.trim() === ""}
             onClick={applySongCount}
           >
@@ -168,7 +174,7 @@ export function BulkActionsBar({
 
       <button
         type="button"
-        className="w-full rounded-full border border-slate-200 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+        className="w-full rounded-full border border-slate-200 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
         onClick={onClearSelection}
       >
         נקה בחירה
@@ -183,24 +189,24 @@ export function BulkActionsBar({
       <button
         type="button"
         className={cn(
-          "fixed inset-x-4 z-[60] mx-auto flex max-w-md items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-lg md:hidden",
+          "fixed inset-x-4 z-[60] mx-auto flex max-w-md items-center justify-center gap-2 rounded-2xl border border-blue-200/80 bg-gradient-to-r from-blue-600 to-cyan-600 px-4 py-3.5 text-sm font-bold text-white shadow-xl md:hidden",
           bottomOffset,
           expanded && "hidden",
         )}
         onClick={() => setExpanded(true)}
       >
-        {selectedCount.toLocaleString("he-IL")} נבחרו — פעולות ▲
+        {selectedCount.toLocaleString("he-IL")} נבחרו — פעולות
       </button>
 
       {expanded && (
         <div className="fixed inset-0 z-[60] md:hidden" role="presentation">
           <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-md"
             onClick={() => setExpanded(false)}
           />
           <div
             className={cn(
-              "absolute inset-x-0 max-h-[80dvh] overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl",
+              "absolute inset-x-0 max-h-[82dvh] overflow-y-auto rounded-t-3xl border border-white/20 bg-white/95 p-4 shadow-2xl backdrop-blur-xl",
               bottomOffset,
             )}
           >
@@ -210,7 +216,7 @@ export function BulkActionsBar({
       )}
 
       <div
-        className="fixed inset-x-4 z-[60] mx-auto hidden max-w-3xl rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur-md md:bottom-4 md:block"
+        className="fixed inset-x-4 z-[60] mx-auto hidden max-w-3xl rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-[0_16px_48px_rgba(15,23,42,0.12)] backdrop-blur-xl md:bottom-4 md:block"
         role="toolbar"
         aria-label="פעולות מרובות"
       >

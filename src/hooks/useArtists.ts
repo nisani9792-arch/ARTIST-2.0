@@ -124,7 +124,10 @@ export function useArtists(search: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids, handlerName, status, isOdooApproved, songCount }),
       });
-      if (!res.ok) throw new Error("עדכון מרובה נכשל");
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "עדכון מרובה נכשל");
+      }
       return res.json();
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["artists"] }),

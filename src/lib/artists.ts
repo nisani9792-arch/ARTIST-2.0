@@ -1,6 +1,6 @@
 import { and, eq, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "./db";
-import { artists, folders } from "./db/schema";
+import { artists, folders, type ArtistRow } from "./db/schema";
 import {
   DEFAULT_HANDLER,
   normalizeStatus,
@@ -139,11 +139,14 @@ export async function restoreArtist(id: string): Promise<Artist | null> {
   return updateArtist(id, { deletedAt: null });
 }
 
+const BULK_CHUNK_SIZE = 80;
+
 export async function bulkUpdateArtists(
   ids: string[],
   patch: Partial<Pick<Artist, "handlerName" | "status" | "isOdooApproved" | "songCount" | "folderId">>,
 ): Promise<Artist[]> {
-  if (ids.length === 0) return [];
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueIds.length === 0) return [];
 
   const values: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
@@ -155,13 +158,23 @@ export async function bulkUpdateArtists(
   if (patch.songCount !== undefined) values.songCount = Math.max(0, Math.floor(patch.songCount));
   if (patch.folderId !== undefined) values.folderId = patch.folderId;
 
-  const rows = await db
-    .update(artists)
-    .set(values)
-    .where(inArray(artists.id, ids))
-    .returning();
+  if (Object.keys(values).length <= 1) {
+    throw new Error("לא צוינו שדות לעדכון");
+  }
 
-  return rows.map(toArtist);
+  const allRows: ArtistRow[] = [];
+
+  for (let i = 0; i < uniqueIds.length; i += BULK_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + BULK_CHUNK_SIZE);
+    const rows = await db
+      .update(artists)
+      .set(values)
+      .where(and(inArray(artists.id, chunk), activeArtists()))
+      .returning();
+    allRows.push(...rows);
+  }
+
+  return allRows.map(toArtist);
 }
 
 export async function importArtistsFromRows(

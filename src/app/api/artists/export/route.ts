@@ -11,8 +11,13 @@ export async function GET(request: NextRequest) {
     const scope = request.nextUrl.searchParams.get("scope") ?? "all";
     const idsParam = request.nextUrl.searchParams.get("ids");
     const q = request.nextUrl.searchParams.get("q") ?? undefined;
+    const statusParam = request.nextUrl.searchParams.get("status");
 
     let artists = await listArtists(q);
+
+    if (statusParam === "signed" || statusParam === "unsigned" || statusParam === "in_process") {
+      artists = artists.filter((a) => a.status === statusParam);
+    }
 
     if (scope === "selected" && idsParam) {
       const ids = new Set(idsParam.split(",").filter(Boolean));
@@ -40,7 +45,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="artists-export.csv"`,
+        "Content-Disposition": `attachment; filename="artists-${statusParam ?? scope}-export.csv"`,
       },
     });
   } catch (error) {

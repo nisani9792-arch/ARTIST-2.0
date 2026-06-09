@@ -10,9 +10,10 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useCallback, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { boardCollisionDetection, resolveBoardDropStatus } from "@/lib/kanban-dnd";
 import { ColumnResizeHandle } from "./kanban/ColumnResizeHandle";
 import { KanbanColumn } from "./kanban/KanbanColumn";
-import { ArtistCard } from "./kanban/ArtistCard";
+import { BoardArtistCard } from "./kanban/BoardArtistCard";
 import { UnsignedVault } from "./UnsignedVault";
 import type { Artist, ArtistStatus } from "@/lib/types";
 import { STATUS_META } from "@/lib/types";
@@ -27,14 +28,11 @@ type DesktopWorkspaceGridProps = {
   onSetSelection: (ids: string[]) => void;
   onOpenDetail: (artist: Artist) => void;
   onBulkStatusChange: (ids: string[], status: ArtistStatus) => void;
+  onExportColumn?: (status: ArtistStatus) => void;
   onContextMenu?: (artist: Artist, event: MouseEvent) => void;
   hideBoard?: boolean;
-  foldersSlot?: ReactNode;
   quickEditSlot?: ReactNode;
 };
-
-const isBoardColumn = (status: ArtistStatus): status is BoardColumnStatus =>
-  status === "in_process" || status === "signed";
 
 export function DesktopWorkspaceGrid({
   artists,
@@ -44,9 +42,9 @@ export function DesktopWorkspaceGrid({
   onSetSelection,
   onOpenDetail,
   onBulkStatusChange,
+  onExportColumn,
   onContextMenu,
   hideBoard = false,
-  foldersSlot,
   quickEditSlot,
 }: DesktopWorkspaceGridProps) {
   const boardRef = useRef<HTMLDivElement>(null);
@@ -62,7 +60,7 @@ export function DesktopWorkspaceGrid({
   const resizeVaultWidth = useUiStore((s) => s.resizeVaultWidth);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
   const boardArtists = artists.filter(
@@ -128,13 +126,10 @@ export function DesktopWorkspaceGrid({
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveArtist(null);
-    const { active, over } = event;
-    if (!over) return;
+    const targetStatus = resolveBoardDropStatus(event);
+    if (!targetStatus) return;
 
-    const targetStatus = over.id as ArtistStatus;
-    if (!isBoardColumn(targetStatus)) return;
-
-    const artist = active.data.current?.artist as Artist | undefined;
+    const artist = event.active.data.current?.artist as Artist | undefined;
     if (!artist || artist.status === targetStatus) return;
 
     const dragIds = selectedIds.has(artist.id) ? [...selectedIds] : [artist.id];
@@ -142,10 +137,13 @@ export function DesktopWorkspaceGrid({
   };
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="hidden min-h-0 flex-1 gap-3 lg:flex">
-        {foldersSlot}
-
+    <DndContext
+      sensors={sensors}
+      collisionDetection={boardCollisionDetection}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="hidden min-h-0 flex-1 lg:flex">
         <div
           ref={boardRef}
           className="grid min-h-0 min-w-0 flex-1 gap-0"
@@ -167,12 +165,12 @@ export function DesktopWorkspaceGrid({
           ) : (
             <button
               type="button"
-              className="flex min-h-0 cursor-pointer flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 py-2 text-[10px] font-bold text-slate-500 transition hover:border-cyan-300 hover:bg-cyan-50/50"
+              className="flex min-h-0 cursor-pointer flex-col items-center justify-center rounded-2xl border border-slate-200/80 bg-slate-50 py-2 text-[10px] font-bold text-slate-500 transition hover:border-cyan-300 hover:bg-cyan-50/60"
               onClick={toggleVault}
-              title="פתח Vault"
+              title="פתח רשימת לא חתומים"
             >
               <span className="[writing-mode:vertical-rl]" style={{ textOrientation: "mixed" }}>
-                Vault ({vaultArtists.length})
+                לא חתומים ({vaultArtists.length})
               </span>
             </button>
           )}
@@ -184,6 +182,7 @@ export function DesktopWorkspaceGrid({
               artists={col0.items}
               selectedIds={selectedIds}
               desktop
+              onExportColumn={onExportColumn}
               onSelectArtist={(artist, event) => handleSelect(col0.items, artist, event)}
               onOpenDetail={onOpenDetail}
               onContextMenu={onContextMenu}
@@ -204,6 +203,7 @@ export function DesktopWorkspaceGrid({
               artists={col1.items}
               selectedIds={selectedIds}
               desktop
+              onExportColumn={onExportColumn}
               onSelectArtist={(artist, event) => handleSelect(col1.items, artist, event)}
               onOpenDetail={onOpenDetail}
               onContextMenu={onContextMenu}
@@ -217,8 +217,8 @@ export function DesktopWorkspaceGrid({
 
       <DragOverlay dropAnimation={null}>
         {activeArtist ? (
-          <div className="w-[240px] rotate-1 opacity-95">
-            <ArtistCard
+          <div className="w-[300px] rotate-1 opacity-95">
+            <BoardArtistCard
               artist={activeArtist}
               selected={selectedIds.has(activeArtist.id)}
               onSelect={() => {}}

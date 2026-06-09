@@ -5,10 +5,10 @@ import type { ArtistStatus } from "@/lib/types";
 export type BoardColumnStatus = Extract<ArtistStatus, "in_process" | "signed">;
 export type ViewMode = "kanban" | "list";
 
-const DEFAULT_ORDER: BoardColumnStatus[] = ["in_process", "signed"];
+const DEFAULT_ORDER: BoardColumnStatus[] = ["signed", "in_process"];
 const DEFAULT_WIDTHS: Record<BoardColumnStatus, number> = {
-  in_process: 50,
-  signed: 50,
+  signed: 58,
+  in_process: 42,
 };
 const MIN_COL_WIDTH = 22;
 const MAX_COL_WIDTH = 78;
@@ -54,7 +54,7 @@ export const useUiStore = create<UiState>()(
       quickEditArtistId: null,
       statusFilter: "all",
       viewMode: "kanban",
-      mobileBoardTab: "in_process",
+      mobileBoardTab: "signed",
       columnOrder: DEFAULT_ORDER,
       columnWidths: DEFAULT_WIDTHS,
       vaultWidthPct: DEFAULT_VAULT_WIDTH,
