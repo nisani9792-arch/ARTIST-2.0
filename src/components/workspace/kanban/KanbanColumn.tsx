@@ -92,10 +92,9 @@ export function KanbanColumn({
   return (
     <section
       ref={setRefs}
-      style={desktop && widthPct ? { flex: `0 0 ${widthPct}%` } : undefined}
       className={cn(
         "flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50/90 p-3 shadow-inner",
-        desktop ? "min-h-0 min-w-[160px] max-w-[78%] flex-1" : "h-full min-h-0 w-full flex-1",
+        desktop ? "min-h-0 min-w-0 h-full w-full overflow-hidden" : "h-full min-h-0 w-full flex-1",
         isOver && "border-cyan-400 bg-cyan-50/40 ring-2 ring-cyan-200",
         isColumnOver && "ring-2 ring-blue-300",
         isColumnDragging && "opacity-60",

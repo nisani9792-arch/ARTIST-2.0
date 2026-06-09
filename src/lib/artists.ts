@@ -261,6 +261,57 @@ export async function markSignedByFilter(input: {
   return rows.length;
 }
 
+export async function updateArtistsByNames(input: {
+  names: string[];
+  status?: ArtistStatus;
+  isOdooApproved?: boolean;
+  handlerName?: string;
+}): Promise<number> {
+  const trimmed = input.names.map((n) => n.trim()).filter(Boolean);
+  if (trimmed.length === 0) return 0;
+
+  const values: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
+  if (input.status !== undefined) values.status = input.status;
+  if (input.isOdooApproved !== undefined) values.isOdooApproved = input.isOdooApproved;
+  if (input.handlerName !== undefined) values.owner = input.handlerName.trim();
+
+  const rows = await db
+    .update(artists)
+    .set(values)
+    .where(
+      and(
+        activeArtists(),
+        inArray(artists.nameHe, trimmed),
+      ),
+    )
+    .returning({ id: artists.id });
+
+  return rows.length;
+}
+
+export async function markOdooByFilter(input: {
+  isOdooApproved: boolean;
+  status?: ArtistStatus;
+  handlerName?: string;
+}): Promise<number> {
+  const conditions = [activeArtists()];
+  if (input.status !== undefined) conditions.push(eq(artists.status, input.status));
+  if (input.handlerName) conditions.push(eq(artists.owner, input.handlerName));
+
+  const rows = await db
+    .update(artists)
+    .set({
+      isOdooApproved: input.isOdooApproved,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(and(...conditions))
+    .returning({ id: artists.id });
+
+  return rows.length;
+}
+
 export async function migrateStuckToInProcess(): Promise<number> {
   const rows = await db
     .update(artists)

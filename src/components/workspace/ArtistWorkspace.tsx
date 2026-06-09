@@ -16,6 +16,7 @@ import { TrashPanel } from "./TrashPanel";
 import { UnsignedVault } from "./UnsignedVault";
 import { ViewModeSwitcher } from "./ViewModeSwitcher";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
+import { DesktopWorkspaceGrid } from "./DesktopWorkspaceGrid";
 import { KanbanBoard } from "./kanban/KanbanBoard";
 import { WorkspaceLoadingSkeleton } from "./WorkspaceLoadingSkeleton";
 import { BottomNavItem, MobileShell } from "@/components/shell/MobileShell";
@@ -59,6 +60,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
   const toggleVault = useUiStore((s) => s.toggleVault);
   const setQuickEditArtistId = useUiStore((s) => s.setQuickEditArtistId);
   const setCommandOpen = useUiStore((s) => s.setCommandOpen);
+  const setCommandQuery = useUiStore((s) => s.setCommandQuery);
   const quickEditId = useUiStore((s) => s.quickEditArtistId);
   const vaultOpen = useUiStore((s) => s.vaultOpen);
 
@@ -123,6 +125,16 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     () => artists.filter((a) => a.status === "in_process" || a.status === "signed").length,
     [artists],
   );
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setCommandQuery(value);
+  };
+
+  const openCommandMenu = () => {
+    setCommandQuery(search);
+    setCommandOpen(true);
+  };
 
   const showToast = (message: string) => {
     setToast(message);
@@ -290,7 +302,13 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
         badge={vaultArtists.length}
         onClick={toggleVault}
       />
-      <BottomNavItem label="חיפוש" onClick={() => setCommandOpen(true)} />
+      <BottomNavItem
+        label="חיפוש"
+        onClick={() => {
+          setCommandQuery(search);
+          setCommandOpen(true);
+        }}
+      />
       <BottomNavItem label="הוסף" onClick={handleAddArtist} />
     </div>
   );
@@ -342,7 +360,8 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
         <WorkspaceToolbar
           operatorName={operatorName}
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={handleSearchChange}
+          onOpenCommandMenu={openCommandMenu}
           quickName={quickName}
           onQuickNameChange={setQuickName}
           onQuickCreate={handleQuickCreate}
@@ -399,7 +418,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
               <button
                 type="button"
                 className="hidden rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-300 hover:text-blue-700 sm:inline-flex"
-                onClick={() => setCommandOpen(true)}
+                onClick={openCommandMenu}
               >
                 חיפוש מהיר (Ctrl+K)
               </button>
@@ -420,26 +439,26 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
 
           {isLoading ? (
             <WorkspaceLoadingSkeleton />
-          ) : (
-            <div className="flex min-h-0 flex-1 gap-2 md:gap-4">
-              <FoldersPanel
-                folders={folders}
-                activeFolderId={activeFolderId}
-                onSelectFolder={setActiveFolderId}
-                onCreateFolder={(name) => {
-                  void createFolder(name).then(() => showToast(`נוצרה תיקייה: ${name}`));
-                }}
-              />
-
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                {viewMode === "list" ? (
-                  <ArtistsTable
-                    artists={artists}
-                    selectedIds={selectedIds}
-                    onToggleSelect={toggleSelected}
-                    onOpenDetail={openArtist}
-                  />
-                ) : (
+          ) : viewMode === "list" ? (
+              <div className="flex min-h-0 flex-1 gap-2 md:gap-4">
+                <FoldersPanel
+                  folders={folders}
+                  activeFolderId={activeFolderId}
+                  onSelectFolder={setActiveFolderId}
+                  onCreateFolder={(name) => {
+                    void createFolder(name).then(() => showToast(`נוצרה תיקייה: ${name}`));
+                  }}
+                />
+                <ArtistsTable
+                  artists={artists}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelected}
+                  onOpenDetail={openArtist}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="flex min-h-0 flex-1 flex-col lg:hidden">
                   <KanbanBoard
                     artists={artists}
                     selectedIds={selectedIds}
@@ -450,26 +469,47 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
                     onContextMenu={handleContextMenu}
                     hideBoard={hideBoard}
                   />
-                )}
-              </div>
+                  <UnsignedVault
+                    artists={vaultArtists}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelected}
+                    onOpenDetail={openArtist}
+                  />
+                </div>
 
-              <UnsignedVault
-                artists={vaultArtists}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelected}
-                onOpenDetail={openArtist}
-              />
-
-              <QuickEditPanel
-                artist={quickEditArtist}
-                handlers={handlers}
-                onSave={(id, patch) => {
-                  void updateArtist({ id, patch });
-                  showToast("נשמר");
-                }}
-              />
-            </div>
-          )}
+                <DesktopWorkspaceGrid
+                  artists={artists}
+                  vaultArtists={vaultArtists}
+                  hideBoard={hideBoard}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelected}
+                  onSetSelection={setSelection}
+                  onOpenDetail={openArtist}
+                  onBulkStatusChange={handleBulkStatusChange}
+                  onContextMenu={handleContextMenu}
+                  foldersSlot={
+                    <FoldersPanel
+                      folders={folders}
+                      activeFolderId={activeFolderId}
+                      onSelectFolder={setActiveFolderId}
+                      onCreateFolder={(name) => {
+                        void createFolder(name).then(() => showToast(`נוצרה תיקייה: ${name}`));
+                      }}
+                    />
+                  }
+                  quickEditSlot={
+                    <QuickEditPanel
+                      artist={quickEditArtist}
+                      handlers={handlers}
+                      onSave={(id, patch) => {
+                        void updateArtist({ id, patch });
+                        showToast("נשמר");
+                      }}
+                    />
+                  }
+                />
+              </>
+            )}
         </div>
 
         <BulkActionsBar
@@ -549,7 +589,19 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
       <CommandMenu
         artists={allArtists}
         onStatusChange={(id, status) => void handleBulkStatusChange([id], status)}
+        onOdooChange={(id, approved) => {
+          void updateArtist({ id, patch: { isOdooApproved: approved } });
+          showToast(approved ? "אושר Odoo" : "בוטל Odoo");
+        }}
         onOpenDetail={openArtist}
+        onRunAi={async (cmd) => {
+          try {
+            const result = await runCommand(cmd);
+            showToast(result.message);
+          } catch (error) {
+            showToast(error instanceof Error ? error.message : "פקודה נכשלה");
+          }
+        }}
       />
     </MobileShell>
   );

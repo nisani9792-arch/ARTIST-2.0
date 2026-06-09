@@ -12,6 +12,7 @@ type UnsignedVaultProps = {
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onOpenDetail: (artist: Artist) => void;
+  embedded?: boolean;
 };
 
 export function UnsignedVault({
@@ -19,9 +20,11 @@ export function UnsignedVault({
   selectedIds,
   onToggleSelect,
   onOpenDetail,
+  embedded = false,
 }: UnsignedVaultProps) {
   const vaultOpen = useUiStore((s) => s.vaultOpen);
   const toggleVault = useUiStore((s) => s.toggleVault);
+  const showPanel = embedded || vaultOpen;
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -31,7 +34,7 @@ export function UnsignedVault({
     overscan: 10,
   });
 
-  if (!vaultOpen) {
+  if (!showPanel) {
     return (
       <>
         <aside
@@ -55,16 +58,23 @@ export function UnsignedVault({
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-[44] bg-slate-900/40 backdrop-blur-sm lg:hidden"
-        onClick={toggleVault}
-        role="presentation"
-      />
+      {!embedded && (
+        <div
+          className="fixed inset-0 z-[44] bg-slate-900/40 backdrop-blur-sm lg:hidden"
+          onClick={toggleVault}
+          role="presentation"
+        />
+      )}
       <aside
         className={cn(
-          "z-[45] flex flex-col gap-3 border border-slate-200 bg-slate-50 p-3 shadow-2xl",
-          "fixed inset-x-0 bottom-0 max-h-[75dvh] rounded-t-3xl",
-          "lg:static lg:max-h-none lg:w-64 lg:shrink-0 lg:rounded-3xl lg:shadow-none",
+          "flex min-h-0 flex-col gap-3 border border-slate-200 bg-slate-50 p-3",
+          embedded
+            ? "h-full min-w-0 rounded-2xl shadow-inner"
+            : cn(
+                "z-[45] shadow-2xl",
+                "fixed inset-x-0 bottom-0 max-h-[75dvh] rounded-t-3xl",
+                "lg:static lg:max-h-none lg:w-64 lg:shrink-0 lg:rounded-3xl lg:shadow-none",
+              ),
         )}
       >
         <header className="flex items-center justify-between gap-2 border-b border-slate-200/80 pb-2">

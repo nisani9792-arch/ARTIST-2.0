@@ -15,7 +15,6 @@ import { STATUS_META, type Artist, type ArtistStatus } from "@/lib/types";
 import { useUiStore, type BoardColumnStatus } from "@/stores/useUiStore";
 import { selectRangeInColumn } from "./selection";
 import { ArtistCard } from "./ArtistCard";
-import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import { KanbanColumn } from "./KanbanColumn";
 
 export type KanbanBoardProps = {
@@ -45,14 +44,11 @@ export function KanbanBoard({
   const [activeArtist, setActiveArtist] = useState<Artist | null>(null);
   const [activeColumn, setActiveColumn] = useState<BoardColumnStatus | null>(null);
   const anchorIdRef = useRef<string | null>(null);
-  const boardRef = useRef<HTMLDivElement>(null);
 
   const columnOrder = useUiStore((s) => s.columnOrder);
-  const columnWidths = useUiStore((s) => s.columnWidths);
   const mobileBoardTab = useUiStore((s) => s.mobileBoardTab);
   const setMobileBoardTab = useUiStore((s) => s.setMobileBoardTab);
   const setColumnOrder = useUiStore((s) => s.setColumnOrder);
-  const resizeAdjacentColumns = useUiStore((s) => s.resizeAdjacentColumns);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -66,7 +62,6 @@ export function KanbanBoard({
     status,
     meta: STATUS_META[status],
     items: boardArtists.filter((a) => a.status === status),
-    widthPct: columnWidths[status],
   }));
 
   const mobileColumn = grouped.find((g) => g.status === mobileBoardTab) ?? grouped[0];
@@ -138,17 +133,10 @@ export function KanbanBoard({
     }
   };
 
-  const handleResize = (left: BoardColumnStatus, right: BoardColumnStatus, deltaPx: number) => {
-    const width = boardRef.current?.offsetWidth ?? 1;
-    const deltaPct = (deltaPx / width) * 100;
-    resizeAdjacentColumns(left, right, deltaPct);
-  };
-
   const renderColumn = (
     status: BoardColumnStatus,
     label: string,
     items: Artist[],
-    widthPct: number,
     desktop: boolean,
     hideHeader?: boolean,
   ) => (
@@ -158,7 +146,6 @@ export function KanbanBoard({
       label={label}
       artists={items}
       selectedIds={selectedIds}
-      widthPct={widthPct}
       desktop={desktop}
       hideHeader={hideHeader}
       onSelectArtist={(artist, event) => handleSelect(items, artist, event)}
@@ -210,25 +197,8 @@ export function KanbanBoard({
             mobileColumn.status,
             mobileColumn.meta.label,
             mobileColumn.items,
-            100,
             false,
           )}
-      </div>
-
-      {/* Desktop: two columns + resize */}
-      <div ref={boardRef} className="hidden min-h-0 flex-1 gap-0 lg:flex">
-        {grouped.map(({ status, meta, items, widthPct }, index) => (
-          <div key={status} className="flex min-h-0 min-w-0 flex-1">
-            {renderColumn(status, meta.label, items, widthPct, true)}
-            {index < grouped.length - 1 && (
-              <ColumnResizeHandle
-                onResize={(deltaPx) =>
-                  handleResize(status, grouped[index + 1].status, deltaPx)
-                }
-              />
-            )}
-          </div>
-        ))}
       </div>
 
       </div>

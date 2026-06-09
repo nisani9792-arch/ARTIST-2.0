@@ -12,6 +12,9 @@ const DEFAULT_WIDTHS: Record<BoardColumnStatus, number> = {
 };
 const MIN_COL_WIDTH = 22;
 const MAX_COL_WIDTH = 78;
+const MIN_VAULT_WIDTH = 18;
+const MAX_VAULT_WIDTH = 45;
+const DEFAULT_VAULT_WIDTH = 28;
 
 type UiState = {
   vaultOpen: boolean;
@@ -22,6 +25,8 @@ type UiState = {
   mobileBoardTab: BoardColumnStatus;
   columnOrder: BoardColumnStatus[];
   columnWidths: Record<BoardColumnStatus, number>;
+  vaultWidthPct: number;
+  commandQuery: string;
   setVaultOpen: (open: boolean) => void;
   toggleVault: () => void;
   setCommandOpen: (open: boolean) => void;
@@ -36,6 +41,8 @@ type UiState = {
     right: BoardColumnStatus,
     deltaPct: number,
   ) => void;
+  resizeVaultWidth: (deltaPct: number) => void;
+  setCommandQuery: (query: string) => void;
   resetColumnLayout: () => void;
 };
 
@@ -50,6 +57,8 @@ export const useUiStore = create<UiState>()(
       mobileBoardTab: "in_process",
       columnOrder: DEFAULT_ORDER,
       columnWidths: DEFAULT_WIDTHS,
+      vaultWidthPct: DEFAULT_VAULT_WIDTH,
+      commandQuery: "",
       setVaultOpen: (open) => set({ vaultOpen: open }),
       toggleVault: () => set((s) => ({ vaultOpen: !s.vaultOpen })),
       setCommandOpen: (open) => set({ commandOpen: open }),
@@ -82,14 +91,27 @@ export const useUiStore = create<UiState>()(
           },
         });
       },
+      resizeVaultWidth: (deltaPct) => {
+        const next = Math.min(
+          MAX_VAULT_WIDTH,
+          Math.max(MIN_VAULT_WIDTH, get().vaultWidthPct + deltaPct),
+        );
+        set({ vaultWidthPct: next });
+      },
+      setCommandQuery: (commandQuery) => set({ commandQuery }),
       resetColumnLayout: () =>
-        set({ columnOrder: DEFAULT_ORDER, columnWidths: DEFAULT_WIDTHS }),
+        set({
+          columnOrder: DEFAULT_ORDER,
+          columnWidths: DEFAULT_WIDTHS,
+          vaultWidthPct: DEFAULT_VAULT_WIDTH,
+        }),
     }),
     {
       name: "artist-ui",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         vaultOpen: state.vaultOpen,
+        vaultWidthPct: state.vaultWidthPct,
         columnOrder: state.columnOrder,
         columnWidths: state.columnWidths,
         statusFilter: state.statusFilter,

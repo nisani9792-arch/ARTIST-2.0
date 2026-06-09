@@ -3,9 +3,12 @@ import { z } from "zod";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
 import {
   bulkUpdateArtists,
+  createArtist,
   listArtists,
+  markOdooByFilter,
   markSignedByFilter,
   reassignHandlerByFilter,
+  updateArtistsByNames,
 } from "@/lib/artists";
 import { isGeminiConfigured, parseHebrewCommand } from "@/lib/gemini";
 import { STATUS_META } from "@/lib/types";
@@ -35,6 +38,7 @@ export async function POST(request: NextRequest) {
       unsignedCount,
       signedCount,
       inProcessCount,
+      sampleNames: artists.slice(0, 30).map((a) => a.name),
     });
 
     let affected = 0;
@@ -61,6 +65,34 @@ export async function POST(request: NextRequest) {
         await bulkUpdateArtists(parsed.ids, { handlerName: parsed.handlerName });
         affected = parsed.ids.length;
         message = `עודכנו ${affected} אומנים — מטפל: ${parsed.handlerName}`;
+        break;
+      case "create_artist": {
+        const artist = await createArtist({
+          name: parsed.name,
+          status: parsed.status,
+          handlerName: parsed.handlerName,
+          isOdooApproved: parsed.isOdooApproved,
+        });
+        affected = 1;
+        message = `נוצר אומן: ${artist.name}`;
+        break;
+      }
+      case "update_by_names":
+        affected = await updateArtistsByNames({
+          names: parsed.names,
+          status: parsed.status,
+          handlerName: parsed.handlerName,
+          isOdooApproved: parsed.isOdooApproved,
+        });
+        message = `עודכנו ${affected} אומנים לפי שם`;
+        break;
+      case "bulk_odoo":
+        affected = await markOdooByFilter({
+          isOdooApproved: parsed.isOdooApproved,
+          status: parsed.filter?.status,
+          handlerName: parsed.filter?.handlerName,
+        });
+        message = `עודכנו ${affected} אומנים — Odoo ${parsed.isOdooApproved ? "אושר" : "בוטל"}`;
         break;
     }
 

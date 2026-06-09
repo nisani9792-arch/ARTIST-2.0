@@ -61,24 +61,22 @@ export async function analyzeStuckArtists(artists: Artist[]): Promise<string[]> 
   return parsed.stuckIds;
 }
 
+const statusEnum = z.enum(["signed", "unsigned", "in_process"]);
+
 export const commandSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("reassign_handler"),
     fromHandler: z.string().optional(),
     toHandler: z.string(),
-    filter: z
-      .object({
-        status: z.enum(["signed", "unsigned", "in_process"]).optional(),
-      })
-      .optional(),
+    filter: z.object({ status: statusEnum.optional() }).optional(),
   }),
   z.object({
     action: z.literal("mark_status"),
-    status: z.enum(["signed", "unsigned", "in_process"]),
+    status: statusEnum,
     filter: z
       .object({
         handlerName: z.string().optional(),
-        fromStatus: z.enum(["signed", "unsigned", "in_process"]).optional(),
+        fromStatus: statusEnum.optional(),
       })
       .optional(),
   }),
@@ -87,19 +85,61 @@ export const commandSchema = z.discriminatedUnion("action", [
     ids: z.array(z.string()),
     handlerName: z.string(),
   }),
+  z.object({
+    action: z.literal("create_artist"),
+    name: z.string().min(1),
+    status: statusEnum.optional(),
+    handlerName: z.string().optional(),
+    isOdooApproved: z.boolean().optional(),
+  }),
+  z.object({
+    action: z.literal("update_by_names"),
+    names: z.array(z.string().min(1)).min(1),
+    status: statusEnum.optional(),
+    handlerName: z.string().optional(),
+    isOdooApproved: z.boolean().optional(),
+  }),
+  z.object({
+    action: z.literal("bulk_odoo"),
+    isOdooApproved: z.boolean(),
+    filter: z
+      .object({
+        status: statusEnum.optional(),
+        handlerName: z.string().optional(),
+      })
+      .optional(),
+  }),
 ]);
 
 export type AiCommand = z.infer<typeof commandSchema>;
 
 export async function parseHebrewCommand(
   command: string,
-  context: { handlers: string[]; unsignedCount: number; signedCount: number; inProcessCount: number },
+  context: {
+    handlers: string[];
+    unsignedCount: number;
+    signedCount: number;
+    inProcessCount: number;
+    sampleNames?: string[];
+  },
 ): Promise<AiCommand> {
   const model = getModel(
-    `אתה מפרש פקודות CRM בעברית לפעולות מובנות. החזר JSON בלבד:
+    `אתה מפרש פקודות CRM בעברית לפעולות מובנות. החזר JSON בלבד עם אחד מהמבנים:
 1) {"action":"reassign_handler","fromHandler":"יוסי","toHandler":"דוד","filter":{"status":"unsigned"}}
 2) {"action":"mark_status","status":"signed","filter":{"handlerName":"יוסי","fromStatus":"unsigned"}}
-3) {"action":"bulk_handler","ids":["uuid"],"handlerName":"דוד"}`,
+3) {"action":"bulk_handler","ids":["uuid"],"handlerName":"דוד"}
+4) {"action":"create_artist","name":"שם האומן","status":"unsigned","handlerName":"מטפל","isOdooApproved":false}
+5) {"action":"update_by_names","names":["אבי רוקובסקי","שם נוסף"],"status":"signed","isOdooApproved":true}
+6) {"action":"bulk_odoo","isOdooApproved":true,"filter":{"status":"signed"}}
+
+דוגמאות:
+- "צור אומן חדש בשם דני כהן" → create_artist
+- "סמן את אבי רוקובסקי כחתום" → update_by_names עם status signed
+- "העבר את כל הלא חתומים של יוסי לחתום" → mark_status
+- "אשר Odoo לכל החתומים" → bulk_odoo עם isOdooApproved true
+- "שנה מטפל של כל הלא חתומים לדוד" → reassign_handler
+
+סטטוסים: signed=חתום, unsigned=לא חתום, in_process=בעבודה`,
   );
 
   const result = await model.generateContent(JSON.stringify({ command, context }));

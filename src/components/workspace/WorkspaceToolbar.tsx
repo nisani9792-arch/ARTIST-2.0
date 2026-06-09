@@ -15,6 +15,7 @@ type WorkspaceToolbarProps = {
   selectedCount: number;
   onSelectAll: () => void;
   onClearSelection: () => void;
+  onOpenCommandMenu?: () => void;
 };
 
 export function WorkspaceToolbar({
@@ -32,6 +33,7 @@ export function WorkspaceToolbar({
   selectedCount,
   onSelectAll,
   onClearSelection,
+  onOpenCommandMenu,
 }: WorkspaceToolbarProps) {
   return (
     <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200 bg-white/80 pt-safe backdrop-blur-md">
@@ -57,10 +59,17 @@ export function WorkspaceToolbar({
         <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
           <input
             className="w-full min-w-0 flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:ring-2 focus:ring-blue-500 sm:min-w-[220px]"
-            placeholder="חיפוש לפי שם או מטפל..."
+            placeholder="חיפוש ופעולות… (Ctrl+K)"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            aria-label="חיפוש"
+            onFocus={() => onOpenCommandMenu?.()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                onOpenCommandMenu?.();
+              }
+            }}
+            aria-label="חיפוש ופעולות"
           />
 
           <input
