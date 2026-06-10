@@ -124,20 +124,20 @@ export async function parseHebrewCommand(
   },
 ): Promise<AiCommand> {
   const model = getModel(
-    `אתה מפרש פקודות CRM בעברית לפעולות מובנות. החזר JSON בלבד עם אחד מהמבנים:
-1) {"action":"reassign_handler","fromHandler":"יוסי","toHandler":"דוד","filter":{"status":"unsigned"}}
-2) {"action":"mark_status","status":"signed","filter":{"handlerName":"יוסי","fromStatus":"unsigned"}}
-3) {"action":"bulk_handler","ids":["uuid"],"handlerName":"דוד"}
-4) {"action":"create_artist","name":"שם האומן","status":"unsigned","handlerName":"מטפל","isOdooApproved":false}
-5) {"action":"update_by_names","names":["אבי רוקובסקי","שם נוסף"],"status":"signed","isOdooApproved":true}
-6) {"action":"bulk_odoo","isOdooApproved":true,"filter":{"status":"signed"}}
+    `אתה מפרש פקודות CRM בעברית לפעולות מובנות. החזר JSON בלבד.
 
-דוגמאות:
-- "צור אומן חדש בשם דני כהן" → create_artist
-- "סמן את אבי רוקובסקי כחתום" → update_by_names עם status signed
-- "העבר את כל הלא חתומים של יוסי לחתום" → mark_status
-- "אשר Odoo לכל החתומים" → bulk_odoo עם isOdooApproved true
-- "שנה מטפל של כל הלא חתומים לדוד" → reassign_handler
+פורמטים:
+1) update_by_names — רשימת שמות (שורה לכל שם או מופרדים בפסיקים) + פעולה
+   {"action":"update_by_names","names":["אבי זוהר","דני כהן"],"status":"signed"}
+2) mark_status — שינוי לפי סינון
+   {"action":"mark_status","status":"signed","filter":{"fromStatus":"unsigned","handlerName":"יוסי"}}
+3) bulk_odoo — {"action":"bulk_odoo","isOdooApproved":true,"filter":{"status":"signed"}}
+4) create_artist — {"action":"create_artist","name":"שם","status":"unsigned"}
+5) reassign_handler — {"action":"reassign_handler","fromHandler":"יוסי","toHandler":"דוד","filter":{"status":"unsigned"}}
+
+חשוב: אם המשתמש מדביק רשימת שמות עם הוראה למעלה/למטה — חלץ את כל השמות ל-names ב-update_by_names.
+דוגמה קלט:
+"סמן כחתום:\\nאבי זוהר\\nדני כהן" → update_by_names names ["אבי זוהר","דני כהן"] status signed
 
 סטטוסים: signed=חתום, unsigned=לא חתום, in_process=בעבודה`,
   );

@@ -1,18 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
-import { createArtist, getArtistStats, listArtists } from "@/lib/artists";
-import { runMigrations } from "@/lib/db/migrate";
+import { createArtist, getArtistStats, listArtists, type ArtistsScope } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
+
+const scopeValues = ["board", "vault", "all"] as const;
 
 export async function GET(request: NextRequest) {
   try {
     const access = await requireAccess();
     if (!access.ok) return access.response;
-    await runMigrations();
+
     const q = request.nextUrl.searchParams.get("q") ?? undefined;
-    const [artists, stats] = await Promise.all([listArtists(q), getArtistStats()]);
-    return NextResponse.json({ artists, stats });
+    const scopeParam = request.nextUrl.searchParams.get("scope") ?? "board";
+    const scope: ArtistsScope = scopeValues.includes(scopeParam as ArtistsScope)
+      ? (scopeParam as ArtistsScope)
+      : "board";
+
+    const [artists, stats] = await Promise.all([
+      listArtists(q, false, q ? "all" : scope),
+      getArtistStats(),
+    ]);
+
+    return NextResponse.json({ artists, stats, scope: q ? "search" : scope });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "שגיאה בטעינת אומנים" }, { status: 500 });

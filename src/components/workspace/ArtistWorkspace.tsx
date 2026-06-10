@@ -83,7 +83,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     bulkUpdate,
     runCommand,
     isCommandPending,
-  } = useArtists(debouncedSearch);
+  } = useArtists({ search: debouncedSearch, vaultOpen, viewMode });
 
   const { folders, createFolder } = useFolders();
 

@@ -1,21 +1,38 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { encodeArtistIdForPath } from "@/lib/artist-id";
 import { loadArtistsCache, saveArtistsCache } from "@/lib/artists-cache";
 import type { Artist, ArtistStats, ArtistStatus } from "@/lib/types";
+import type { ViewMode } from "@/stores/useUiStore";
 
 type ArtistsResponse = { artists: Artist[]; stats: ArtistStats };
 
-async function fetchArtists(q?: string): Promise<ArtistsResponse> {
-  const params = q ? `?q=${encodeURIComponent(q)}` : "";
-  const res = await fetch(`/api/artists${params}`);
+export type UseArtistsOptions = {
+  search: string;
+  vaultOpen: boolean;
+  viewMode: ViewMode;
+};
+
+async function fetchArtistsScope(
+  scope: "board" | "vault" | "all",
+  q?: string,
+): Promise<ArtistsResponse> {
+  const params = new URLSearchParams();
+  if (q && q.length >= 2) {
+    params.set("q", q);
+  } else {
+    params.set("scope", scope);
+  }
+  const res = await fetch(`/api/artists?${params}`);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error || `טעינת אומנים נכשלה (${res.status})`);
   }
   const data = (await res.json()) as ArtistsResponse;
-  saveArtistsCache(q ?? "", data.artists, data.stats);
+  const cacheKey = q && q.length >= 2 ? `search:${q}` : scope;
+  saveArtistsCache(cacheKey, data.artists, data.stats);
   return data;
 }
 
@@ -26,28 +43,98 @@ export type CreateArtistInput = {
   isOdooApproved?: boolean;
 };
 
-export function useArtists(search: string) {
+export function useArtists({ search, vaultOpen, viewMode }: UseArtistsOptions) {
   const queryClient = useQueryClient();
-  const cached = loadArtistsCache(search);
+  const isSearch = search.trim().length >= 2;
+  const isList = viewMode === "list";
 
-  const artistsQuery = useQuery({
-    queryKey: ["artists", search],
-    queryFn: () => fetchArtists(search || undefined),
-    refetchInterval: 15_000,
+  const boardQuery = useQuery({
+    queryKey: ["artists", "board"],
+    queryFn: () => fetchArtistsScope("board"),
+    enabled: !isSearch,
+    staleTime: 30_000,
+    refetchInterval: isList ? false : 90_000,
     refetchIntervalInBackground: false,
-    placeholderData: cached
-      ? { artists: cached.artists, stats: cached.stats }
-      : undefined,
+    placeholderData: () => {
+      const c = loadArtistsCache("board");
+      return c ? { artists: c.artists, stats: c.stats } : undefined;
+    },
   });
 
-  const invalidateArtists = () => queryClient.invalidateQueries({ queryKey: ["artists"] });
+  const vaultQuery = useQuery({
+    queryKey: ["artists", "vault"],
+    queryFn: () => fetchArtistsScope("vault"),
+    enabled: !isSearch && (vaultOpen || isList),
+    staleTime: 30_000,
+    refetchInterval: false,
+    placeholderData: () => {
+      const c = loadArtistsCache("vault");
+      return c ? { artists: c.artists, stats: c.stats } : undefined;
+    },
+  });
 
-  const applyOptimisticPatch = async (
-    ids: Set<string>,
-    patch: Partial<Artist>,
-  ) => {
-    await queryClient.cancelQueries({ queryKey: ["artists"] });
-    const previous = queryClient.getQueriesData<ArtistsResponse>({ queryKey: ["artists"] });
+  const allQuery = useQuery({
+    queryKey: ["artists", "all"],
+    queryFn: () => fetchArtistsScope("all"),
+    enabled: !isSearch && isList,
+    staleTime: 30_000,
+    refetchInterval: false,
+  });
+
+  const searchQuery = useQuery({
+    queryKey: ["artists", "search", search.trim()],
+    queryFn: () => fetchArtistsScope("all", search.trim()),
+    enabled: isSearch,
+    staleTime: 15_000,
+  });
+
+  const stats =
+    boardQuery.data?.stats ??
+    vaultQuery.data?.stats ??
+    allQuery.data?.stats ??
+    searchQuery.data?.stats;
+
+  const artists = useMemo(() => {
+    if (isSearch) return searchQuery.data?.artists ?? [];
+    if (isList) return allQuery.data?.artists ?? [];
+    const map = new Map<string, Artist>();
+    for (const a of boardQuery.data?.artists ?? []) map.set(a.id, a);
+    if (vaultOpen) {
+      for (const a of vaultQuery.data?.artists ?? []) map.set(a.id, a);
+    }
+    return [...map.values()];
+  }, [
+    isSearch,
+    isList,
+    searchQuery.data,
+    allQuery.data,
+    boardQuery.data,
+    vaultQuery.data,
+    vaultOpen,
+  ]);
+
+  const isLoading =
+    (isSearch && searchQuery.isLoading) ||
+    (isList && allQuery.isLoading) ||
+    (!isSearch && !isList && boardQuery.isLoading) ||
+    (vaultOpen && !isSearch && !isList && vaultQuery.isLoading);
+
+  const isError =
+    boardQuery.isError || vaultQuery.isError || allQuery.isError || searchQuery.isError;
+
+  const error =
+    searchQuery.error ?? allQuery.error ?? boardQuery.error ?? vaultQuery.error;
+
+  const refetch = async () => {
+    await Promise.all([
+      boardQuery.refetch(),
+      vaultOpen ? vaultQuery.refetch() : Promise.resolve(),
+      isList ? allQuery.refetch() : Promise.resolve(),
+      isSearch ? searchQuery.refetch() : Promise.resolve(),
+    ]);
+  };
+
+  const patchAllCaches = (ids: Set<string>, patch: Partial<Artist>) => {
     queryClient.setQueriesData<ArtistsResponse>({ queryKey: ["artists"] }, (old) =>
       old
         ? {
@@ -56,6 +143,12 @@ export function useArtists(search: string) {
           }
         : old,
     );
+  };
+
+  const applyOptimisticPatch = async (ids: Set<string>, patch: Partial<Artist>) => {
+    await queryClient.cancelQueries({ queryKey: ["artists"] });
+    const previous = queryClient.getQueriesData<ArtistsResponse>({ queryKey: ["artists"] });
+    patchAllCaches(ids, patch);
     return { previous };
   };
 
@@ -73,7 +166,11 @@ export function useArtists(search: string) {
       }
       return (await res.json()).artist as Artist;
     },
-    onSuccess: invalidateArtists,
+    onSuccess: (artist) => {
+      queryClient.setQueriesData<ArtistsResponse>({ queryKey: ["artists"] }, (old) =>
+        old ? { ...old, artists: [artist, ...old.artists] } : old,
+      );
+    },
   });
 
   const updateMutation = useMutation({
@@ -113,14 +210,11 @@ export function useArtists(search: string) {
       }
       return (await res.json()).artist as Artist;
     },
-    onMutate: async ({ id, patch }) => {
-      const ids = new Set([id]);
-      return applyOptimisticPatch(ids, patch);
-    },
+    onMutate: async ({ id, patch }) => applyOptimisticPatch(new Set([id]), patch),
+    onSuccess: (artist) => patchAllCaches(new Set([artist.id]), artist),
     onError: (_err, _vars, context) => {
       context?.previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
     },
-    onSettled: invalidateArtists,
   });
 
   const statusMutation = useMutation({
@@ -134,22 +228,17 @@ export function useArtists(search: string) {
         error?: string;
         count?: number;
       };
-      if (!res.ok) {
-        throw new Error(body.error || "עדכון סטטוס נכשל");
-      }
-      return body;
+      if (!res.ok) throw new Error(body.error || "עדכון סטטוס נכשל");
+      return { ids, status, count: body.count ?? ids.length };
     },
-    onMutate: async ({ ids, status }) => {
-      const idSet = new Set(ids);
-      return applyOptimisticPatch(idSet, {
+    onMutate: async ({ ids, status }) =>
+      applyOptimisticPatch(new Set(ids), {
         status,
         lastActionTimestamp: new Date().toISOString(),
-      });
-    },
+      }),
     onError: (_err, _vars, context) => {
       context?.previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
     },
-    onSettled: invalidateArtists,
   });
 
   const bulkMutation = useMutation({
@@ -166,7 +255,12 @@ export function useArtists(search: string) {
       isOdooApproved?: boolean;
       songCount?: number;
     }) => {
-      if (status !== undefined && handlerName === undefined && isOdooApproved === undefined && songCount === undefined) {
+      if (
+        status !== undefined &&
+        handlerName === undefined &&
+        isOdooApproved === undefined &&
+        songCount === undefined
+      ) {
         const res = await fetch("/api/artists/status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -200,7 +294,6 @@ export function useArtists(search: string) {
     onError: (_err, _vars, context) => {
       context?.previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
     },
-    onSettled: invalidateArtists,
   });
 
   const deleteMutation = useMutation({
@@ -209,7 +302,11 @@ export function useArtists(search: string) {
       if (!res.ok) throw new Error("מחיקה נכשלה");
       return (await res.json()).artist as Artist;
     },
-    onSettled: invalidateArtists,
+    onSuccess: (artist) => {
+      queryClient.setQueriesData<ArtistsResponse>({ queryKey: ["artists"] }, (old) =>
+        old ? { ...old, artists: old.artists.filter((a) => a.id !== artist.id) } : old,
+      );
+    },
   });
 
   const commandMutation = useMutation({
@@ -223,18 +320,28 @@ export function useArtists(search: string) {
       if (!res.ok) throw new Error(data.error || "פקודה נכשלה");
       return data as { message: string; affected: number };
     },
-    onSuccess: invalidateArtists,
+    onSuccess: () => {
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["artists"] });
+      }, 1500);
+    },
   });
 
+  const cacheAt = loadArtistsCache(isSearch ? `search:${search}` : "board")?.at ?? null;
+
   return {
-    artists: artistsQuery.data?.artists ?? cached?.artists ?? [],
-    stats: artistsQuery.data?.stats ?? cached?.stats,
-    cacheAt: cached?.at ?? null,
-    isLoading: artistsQuery.isLoading,
-    isFetching: artistsQuery.isFetching,
-    isError: artistsQuery.isError,
-    error: artistsQuery.error,
-    refetch: artistsQuery.refetch,
+    artists,
+    stats,
+    cacheAt,
+    isLoading,
+    isFetching:
+      boardQuery.isFetching ||
+      vaultQuery.isFetching ||
+      allQuery.isFetching ||
+      searchQuery.isFetching,
+    isError,
+    error,
+    refetch,
     createArtist: createMutation.mutateAsync,
     updateArtist: updateMutation.mutateAsync,
     updateStatus: statusMutation.mutateAsync,

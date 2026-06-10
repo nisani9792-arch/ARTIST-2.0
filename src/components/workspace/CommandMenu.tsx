@@ -55,8 +55,9 @@ export function CommandMenu({
   }, [artists, query]);
 
   const looksLikeAiCommand =
-    query.trim().length > 8 &&
-    /(סמן|העבר|צור|אשר|בטל|שנה|כל ה|אומנים|חתום|לא חתום|בעבודה)/.test(query);
+    query.trim().length > 4 &&
+    (query.includes("\n") ||
+      /(סמן|העבר|צור|אשר|בטל|שנה|כל ה|אומנים|חתום|לא חתום|בעבודה|רשימה|הבאים)/.test(query));
 
   if (!open) return null;
 
@@ -77,11 +78,25 @@ export function CommandMenu({
 
         <Command label="חיפוש ופעולות" shouldFilter={false}>
           <div className="border-b border-slate-100 px-4 py-3">
-            <Command.Input
-              className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-cyan-400/50"
-              placeholder="חפש אומן או הקלד פקודה — 'סמן את X כחתום'"
+            <textarea
+              className="w-full resize-y rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-cyan-400/50"
+              placeholder={`חפש אומן, או הדבק רשימה:\nסמן כחתום:\nאבי זוהר\nדני כהן`}
               value={query}
-              onValueChange={setCommandQuery}
+              onChange={(e) => setCommandQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (
+                  (e.ctrlKey || e.metaKey) &&
+                  e.key === "Enter" &&
+                  looksLikeAiCommand &&
+                  onRunAi
+                ) {
+                  e.preventDefault();
+                  onRunAi(query.trim());
+                  setCommandOpen(false);
+                  setCommandQuery("");
+                }
+              }}
+              rows={query.includes("\n") ? Math.min(8, query.split("\n").length + 1) : 2}
               autoFocus
             />
           </div>
@@ -97,19 +112,24 @@ export function CommandMenu({
                   setCommandQuery("");
                 }}
               >
-                <span>הרץ פקודת AI</span>
-                <span className="truncate opacity-90">{query.trim().slice(0, 48)}…</span>
+                <span>הרץ פקודה (Ctrl+Enter)</span>
+                <span className="truncate opacity-90">
+                  {query.trim().split("\n")[0]?.slice(0, 40)}…
+                </span>
               </button>
             </div>
           )}
 
           <Command.List className="max-h-[min(58vh,440px)] overflow-y-auto p-3">
-            <Command.Empty className="px-4 py-10 text-center">
-              <p className="text-sm font-semibold text-slate-700">לא נמצאו תוצאות</p>
-              <p className="mt-1 text-xs text-slate-500">נסה שם אחר או פקודת AI בעברית</p>
-            </Command.Empty>
+            {!looksLikeAiCommand && filtered.length === 0 && (
+              <div className="px-4 py-10 text-center">
+                <p className="text-sm font-semibold text-slate-700">לא נמצאו תוצאות</p>
+                <p className="mt-1 text-xs text-slate-500">נסה שם אחר או הדבק רשימת שמות עם הוראה</p>
+              </div>
+            )}
 
-            {filtered.map((artist) => (
+            {!looksLikeAiCommand &&
+              filtered.map((artist) => (
               <Command.Item
                 key={artist.id}
                 value={artist.id}
@@ -181,7 +201,7 @@ export function CommandMenu({
                   </button>
                 </div>
               </Command.Item>
-            ))}
+              ))}
           </Command.List>
         </Command>
 

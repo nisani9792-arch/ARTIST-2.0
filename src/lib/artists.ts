@@ -15,9 +15,29 @@ import {
 
 const activeArtists = () => isNull(artists.deletedAt);
 
-export async function listArtists(query?: string, includeDeleted = false): Promise<Artist[]> {
+export type ArtistsScope = "board" | "vault" | "all";
+
+export async function listHandlers(): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ owner: artists.owner })
+    .from(artists)
+    .where(activeArtists());
+  return rows.map((r) => r.owner).filter(Boolean).sort((a, b) => a.localeCompare(b, "he"));
+}
+
+export async function listArtists(
+  query?: string,
+  includeDeleted = false,
+  scope: ArtistsScope = "all",
+): Promise<Artist[]> {
   const trimmed = query?.trim();
   const conditions = includeDeleted ? [] : [activeArtists()];
+
+  if (scope === "board") {
+    conditions.push(inArray(artists.status, ["signed", "in_process", "stuck"]));
+  } else if (scope === "vault") {
+    conditions.push(eq(artists.status, "unsigned"));
+  }
 
   if (trimmed) {
     conditions.push(
@@ -315,25 +335,28 @@ export async function updateArtistsByNames(input: {
   isOdooApproved?: boolean;
   handlerName?: string;
 }): Promise<number> {
-  const trimmed = input.names.map((n) => n.trim()).filter(Boolean);
+  const trimmed = [...new Set(input.names.map((n) => n.trim()).filter(Boolean))];
   if (trimmed.length === 0) return 0;
 
   const values: Record<string, unknown> = {
-    updatedAt: new Date().toISOString(),
+    updatedAt: sql`NOW()`,
   };
   if (input.status !== undefined) values.status = input.status;
   if (input.isOdooApproved !== undefined) values.isOdooApproved = input.isOdooApproved;
   if (input.handlerName !== undefined) values.owner = input.handlerName.trim();
 
+  const nameMatch = or(
+    ...trimmed.flatMap((name) => [
+      eq(artists.nameHe, name),
+      ilike(artists.nameHe, name),
+      ilike(artists.nameHe, `%${name}%`),
+    ]),
+  )!;
+
   const rows = await db
     .update(artists)
     .set(values)
-    .where(
-      and(
-        activeArtists(),
-        inArray(artists.nameHe, trimmed),
-      ),
-    )
+    .where(and(activeArtists(), nameMatch))
     .returning({ id: artists.id });
 
   return rows.length;

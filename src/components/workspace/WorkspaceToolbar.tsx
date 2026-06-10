@@ -86,17 +86,18 @@ export function WorkspaceToolbar({
             aria-label="יצירה מהירה"
           />
 
-          <input
-            className="hidden w-40 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 lg:block"
-            placeholder="פקודת AI בעברית..."
+          <textarea
+            className="hidden min-h-[2.5rem] w-48 resize-y rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 lg:block"
+            placeholder="פקודה / רשימת שמות (Ctrl+Enter)"
             value={aiCommand}
             onChange={(e) => onAiCommandChange(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
                 e.preventDefault();
                 onAiSubmit();
               }
             }}
+            rows={aiCommand.includes("\n") ? 4 : 1}
             disabled={isAiPending}
             aria-label="פקודת AI"
           />
