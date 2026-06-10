@@ -3,6 +3,7 @@ import {
   extractEntriesFromText,
   parseLocalHebrewCommand,
   parseNameLine,
+  parseSingleLineCommand,
 } from "./ai-command-parser";
 
 describe("parseNameLine", () => {
@@ -29,7 +30,46 @@ describe("extractEntriesFromText", () => {
   });
 });
 
+describe("parseSingleLineCommand", () => {
+  it("parses add artist in process command", () => {
+    const result = parseSingleLineCommand("משה לוק להוסיף אומן במצב בעבודה");
+    expect(result?.action).toBe("upsert_by_names");
+    if (result?.action === "upsert_by_names") {
+      expect(result.entries).toEqual([{ name: "משה לוק" }]);
+      expect(result.status).toBe("in_process");
+      expect(result.createMissing).toBe(true);
+    }
+  });
+
+  it("parses mark as signed", () => {
+    const result = parseSingleLineCommand("סמן את דני כהן כחתום");
+    expect(result?.action).toBe("upsert_by_names");
+    if (result?.action === "upsert_by_names") {
+      expect(result.entries[0].name).toBe("דני כהן");
+      expect(result.status).toBe("signed");
+    }
+  });
+
+  it("parses prefix add command", () => {
+    const result = parseSingleLineCommand("הוסף יוסי לוי בעבודה");
+    expect(result?.action).toBe("upsert_by_names");
+    if (result?.action === "upsert_by_names") {
+      expect(result.entries[0].name).toBe("יוסי לוי");
+      expect(result.status).toBe("in_process");
+    }
+  });
+});
+
 describe("parseLocalHebrewCommand", () => {
+  it("parses add artist via single line", () => {
+    const result = parseLocalHebrewCommand("משה לוק להוסיף אומן במצב בעבודה");
+    expect(result?.action).toBe("upsert_by_names");
+    if (result?.action === "upsert_by_names") {
+      expect(result.entries[0].name).toBe("משה לוק");
+      expect(result.status).toBe("in_process");
+    }
+  });
+
   it("parses multiline name list with instruction", () => {
     const cmd = `סמן את האומנים הבאים כחתום:
 אבי זוהר

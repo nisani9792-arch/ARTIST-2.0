@@ -9,15 +9,20 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useCallback, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { boardCollisionDetection, resolveBoardDropStatus } from "@/lib/kanban-dnd";
+import { Fragment, useCallback, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import {
+  artistMatchesColumn,
+  BOARD_COLUMN_META,
+  filterArtistsForColumn,
+  type BoardColumnId,
+} from "@/lib/board-columns";
+import { boardCollisionDetection, resolveBoardDropColumn } from "@/lib/kanban-dnd";
 import { ColumnResizeHandle } from "./kanban/ColumnResizeHandle";
 import { KanbanColumn } from "./kanban/KanbanColumn";
 import { BoardArtistCard } from "./kanban/BoardArtistCard";
 import { UnsignedVault } from "./UnsignedVault";
-import type { Artist, ArtistStatus } from "@/lib/types";
-import { STATUS_META } from "@/lib/types";
-import { useUiStore, type BoardColumnStatus } from "@/stores/useUiStore";
+import type { Artist } from "@/lib/types";
+import { useUiStore } from "@/stores/useUiStore";
 import { selectRangeInColumn } from "./kanban/selection";
 
 type DesktopWorkspaceGridProps = {
@@ -27,8 +32,8 @@ type DesktopWorkspaceGridProps = {
   onToggleSelect: (id: string) => void;
   onSetSelection: (ids: string[]) => void;
   onOpenDetail: (artist: Artist) => void;
-  onBulkStatusChange: (ids: string[], status: ArtistStatus) => void;
-  onExportColumn?: (status: ArtistStatus) => void;
+  onBulkColumnChange: (ids: string[], columnId: BoardColumnId) => void;
+  onExportColumn?: (columnId: BoardColumnId) => void;
   onContextMenu?: (artist: Artist, event: MouseEvent) => void;
   hideBoard?: boolean;
   quickEditSlot?: ReactNode;
@@ -41,7 +46,7 @@ export function DesktopWorkspaceGrid({
   onToggleSelect,
   onSetSelection,
   onOpenDetail,
-  onBulkStatusChange,
+  onBulkColumnChange,
   onExportColumn,
   onContextMenu,
   hideBoard = false,
@@ -67,25 +72,25 @@ export function DesktopWorkspaceGrid({
     (a) => a.status === "in_process" || a.status === "signed",
   );
 
-  const grouped = columnOrder.map((status) => ({
-    status,
-    meta: STATUS_META[status],
-    items: boardArtists.filter((a) => a.status === status),
+  const grouped = columnOrder.map((columnId) => ({
+    columnId,
+    meta: BOARD_COLUMN_META[columnId],
+    items: filterArtistsForColumn(boardArtists, columnId),
   }));
 
-  const col0 = grouped[0];
-  const col1 = grouped[1];
-  const boardTotal = columnOrder.reduce((sum, s) => sum + columnWidths[s], 0);
-  const col0Fr = col0 ? (columnWidths[col0.status] / boardTotal) * 100 : 50;
-  const col1Fr = col1 ? (columnWidths[col1.status] / boardTotal) * 100 : 50;
+  const boardTotal = columnOrder.reduce((sum, id) => sum + columnWidths[id], 0);
+  const boardColParts = grouped.flatMap((col, index) => {
+    const fr = ((columnWidths[col.columnId] / boardTotal) * 100).toFixed(3);
+    return index === 0 ? [`${fr}fr`] : ["4px", `${fr}fr`];
+  });
 
   const gridCols = hideBoard
     ? vaultOpen
       ? "1fr"
       : "28px"
     : vaultOpen
-      ? `${vaultWidthPct}fr 4px ${col0Fr}fr 4px ${col1Fr}fr`
-      : `28px ${col0Fr}fr 4px ${col1Fr}fr`;
+      ? [`${vaultWidthPct}fr`, "4px", ...boardColParts].join(" ")
+      : ["28px", ...boardColParts].join(" ");
 
   const handleSelect = useCallback(
     (columnArtists: Artist[], artist: Artist, event: MouseEvent) => {
@@ -99,17 +104,16 @@ export function DesktopWorkspaceGrid({
     [onSetSelection, onToggleSelect],
   );
 
-  const handleSelectAllInCol = (status: ArtistStatus, checked: boolean) => {
-    const colArtists = boardArtists.filter((a) => a.status === status);
+  const handleSelectAllInCol = (visibleArtists: Artist[], checked: boolean) => {
+    const visibleIds = new Set(visibleArtists.map((a) => a.id));
     if (checked) {
-      onSetSelection([...new Set([...selectedIds, ...colArtists.map((a) => a.id)])]);
+      onSetSelection([...new Set([...selectedIds, ...visibleIds])]);
     } else {
-      const colIds = new Set(colArtists.map((a) => a.id));
-      onSetSelection([...selectedIds].filter((id) => !colIds.has(id)));
+      onSetSelection([...selectedIds].filter((id) => !visibleIds.has(id)));
     }
   };
 
-  const handleResizeBoard = (left: BoardColumnStatus, right: BoardColumnStatus, deltaPx: number) => {
+  const handleResizeBoard = (left: BoardColumnId, right: BoardColumnId, deltaPx: number) => {
     const width = boardRef.current?.offsetWidth ?? 1;
     resizeAdjacentColumns(left, right, (deltaPx / width) * 100);
   };
@@ -126,14 +130,14 @@ export function DesktopWorkspaceGrid({
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveArtist(null);
-    const targetStatus = resolveBoardDropStatus(event);
-    if (!targetStatus) return;
+    const targetColumn = resolveBoardDropColumn(event);
+    if (!targetColumn) return;
 
     const artist = event.active.data.current?.artist as Artist | undefined;
-    if (!artist || artist.status === targetStatus) return;
+    if (!artist || artistMatchesColumn(artist, targetColumn)) return;
 
     const dragIds = selectedIds.has(artist.id) ? [...selectedIds] : [artist.id];
-    onBulkStatusChange([...new Set(dragIds)], targetStatus);
+    onBulkColumnChange([...new Set(dragIds)], targetColumn);
   };
 
   return (
@@ -158,6 +162,7 @@ export function DesktopWorkspaceGrid({
                   onToggleSelect={onToggleSelect}
                   onOpenDetail={onOpenDetail}
                   embedded
+                  draggable
                 />
               </div>
               <ColumnResizeHandle onResize={handleResizeVault} />
@@ -175,41 +180,29 @@ export function DesktopWorkspaceGrid({
             </button>
           )}
 
-          {!hideBoard && col0 && (
-            <KanbanColumn
-              status={col0.status}
-              label={col0.meta.label}
-              artists={col0.items}
-              selectedIds={selectedIds}
-              desktop
-              onExportColumn={onExportColumn}
-              onSelectArtist={(artist, event) => handleSelect(col0.items, artist, event)}
-              onOpenDetail={onOpenDetail}
-              onContextMenu={onContextMenu}
-              onSelectAll={(checked) => handleSelectAllInCol(col0.status, checked)}
-            />
-          )}
-
-          {!hideBoard && col0 && col1 && (
-            <ColumnResizeHandle
-              onResize={(deltaPx) => handleResizeBoard(col0.status, col1.status, deltaPx)}
-            />
-          )}
-
-          {!hideBoard && col1 && (
-            <KanbanColumn
-              status={col1.status}
-              label={col1.meta.label}
-              artists={col1.items}
-              selectedIds={selectedIds}
-              desktop
-              onExportColumn={onExportColumn}
-              onSelectArtist={(artist, event) => handleSelect(col1.items, artist, event)}
-              onOpenDetail={onOpenDetail}
-              onContextMenu={onContextMenu}
-              onSelectAll={(checked) => handleSelectAllInCol(col1.status, checked)}
-            />
-          )}
+          {!hideBoard &&
+            grouped.map((col, index) => (
+              <Fragment key={col.columnId}>
+                {index > 0 && (
+                  <ColumnResizeHandle
+                    onResize={(deltaPx) =>
+                      handleResizeBoard(grouped[index - 1].columnId, col.columnId, deltaPx)
+                    }
+                  />
+                )}
+                <KanbanColumn
+                  columnId={col.columnId}
+                  artists={col.items}
+                  selectedIds={selectedIds}
+                  desktop
+                  onExportColumn={onExportColumn}
+                  onSelectArtist={(artist, event) => handleSelect(col.items, artist, event)}
+                  onOpenDetail={onOpenDetail}
+                  onContextMenu={onContextMenu}
+                  onSelectAll={(checked, visible) => handleSelectAllInCol(visible, checked)}
+                />
+              </Fragment>
+            ))}
         </div>
 
         {quickEditSlot}
@@ -217,15 +210,21 @@ export function DesktopWorkspaceGrid({
 
       <DragOverlay dropAnimation={null}>
         {activeArtist ? (
-          <div className="w-[300px] rotate-1 opacity-95">
-            <BoardArtistCard
-              artist={activeArtist}
-              selected={selectedIds.has(activeArtist.id)}
-              onSelect={() => {}}
-              onOpenDetail={() => {}}
-              draggable={false}
-            />
-          </div>
+          activeArtist.status === "unsigned" ? (
+            <div className="max-w-[220px] rotate-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-xl opacity-95">
+              {activeArtist.name}
+            </div>
+          ) : (
+            <div className="w-[300px] rotate-1 opacity-95">
+              <BoardArtistCard
+                artist={activeArtist}
+                selected={selectedIds.has(activeArtist.id)}
+                onSelect={() => {}}
+                onOpenDetail={() => {}}
+                draggable={false}
+              />
+            </div>
+          )
         ) : null}
       </DragOverlay>
     </DndContext>

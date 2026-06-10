@@ -7,7 +7,7 @@ export type ParsedNameEntry = {
 };
 
 const INSTRUCTION_RE =
-  /^(סמן|שנה|העבר|צור|אשר|בטל|רשימה|להלן|הבאים|כל|אומנים|מטפל|גורם|odoo|חתום|חתומים|לא חתום|בעבודה)/i;
+  /^(סמן|שנה|העבר|צור|הוסף|להוסיף|אשר|בטל|רשימה|להלן|הבאים|כל|אומנים|מטפל|גורם|odoo|חתום|חתומים|לא חתום|בעבודה)/i;
 
 const NUMBERED_LINE_RE = /^\d+[\.\)]\s*.+/;
 
@@ -23,7 +23,7 @@ function cleanName(raw: string): string {
     .replace(/^[-•*·]\s*/, "")
     .replace(/^ו-?/, "")
     .replace(/["'״]/g, "")
-    .replace(/\s*(כחתום|כלא חתום|לבעבודה|כבעבודה)\s*$/i, "")
+    .replace(/\s*(?:במצב\s+)?(כחתום|כלא חתום|לבעבודה|כבעבודה|חתום|לא חתום|בעבודה)\s*$/i, "")
     .trim();
 }
 
@@ -39,6 +39,9 @@ export function parseNameLine(line: string): ParsedNameEntry | null {
   if (noteMatch) {
     const name = cleanName(noteMatch[1]);
     const note = noteMatch[2].trim();
+    if (/^(לקראת|להשלים|השלמת)/i.test(note)) {
+      return name.length >= 2 ? { name, note } : null;
+    }
     return name.length >= 2 ? { name, note: note || undefined } : null;
   }
 
@@ -93,8 +96,67 @@ function extractNamesFromSingleLine(text: string): ParsedNameEntry[] {
   return [];
 }
 
+function upsertOne(name: string, status: ArtistStatus, note?: string): AiCommand {
+  return {
+    action: "upsert_by_names",
+    entries: [{ name, note }],
+    status,
+    createMissing: true,
+  };
+}
+
+/** Single-line natural Hebrew commands — no AI needed. */
+export function parseSingleLineCommand(text: string): AiCommand | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const markMatch = trimmed.match(
+    /(?:סמן|שנה|העבר)\s+(?:את\s+)?(.+?)\s+(?:כ|ל)\s*(חתום|לא\s*חתום|בעבודה)/i,
+  );
+  if (markMatch) {
+    const name = cleanName(markMatch[1]);
+    const status = parseStatus(markMatch[2]) ?? parseStatus(trimmed);
+    if (name && status) return upsertOne(name, status);
+  }
+
+  const prefixMatch = trimmed.match(
+    /^(?:הוסף|צור|להוסיף|הוספת)\s+(?:אומן\s+)?(?:חדש\s+)?(?:בשם\s+)?(.+)$/i,
+  );
+  if (prefixMatch) {
+    const name = cleanName(prefixMatch[1]);
+    const status = parseStatus(trimmed) ?? "in_process";
+    if (name) return upsertOne(name, status);
+  }
+
+  const suffixAddMatch = trimmed.match(
+    /^(.+?)\s+(?:ל)?הוס(?:יף|יפה|פה)\s+(?:אומן\s+)?(?:חדש\s+)?(?:במצב\s+)?(.*)$/i,
+  );
+  if (suffixAddMatch) {
+    const name = cleanName(suffixAddMatch[1]);
+    const status =
+      parseStatus(suffixAddMatch[2]) || parseStatus(trimmed) || "in_process";
+    if (name) return upsertOne(name, status);
+  }
+
+  const nameStatusMatch = trimmed.match(
+    /^(.+?)\s+[-–—]?\s*(?:במצב\s+)?(חתום|לא\s*חתום|בעבודה)\s*$/i,
+  );
+  if (nameStatusMatch && !/^(כל|אומנים|רשימה)/i.test(nameStatusMatch[1])) {
+    const name = cleanName(nameStatusMatch[1]);
+    const status = parseStatus(nameStatusMatch[2]);
+    if (name && status) return upsertOne(name, status);
+  }
+
+  return null;
+}
+
+export const LOCAL_COMMAND_HELP = `לא הבנתי את הפקודה. דוגמאות:
+• משה לוק להוסיף אומן במצב בעבודה
+• סמן את דני כהן כחתום
+• סמן כחתום + רשימה (שורה לכל שם, עם מספרים)`;
+
 /**
- * Fast local parser for Hebrew CRM commands — especially multiline / numbered name lists.
+ * Fast local parser for Hebrew CRM commands — no Gemini required.
  */
 export function parseLocalHebrewCommand(command: string): AiCommand | null {
   const text = command.trim();
@@ -103,8 +165,13 @@ export function parseLocalHebrewCommand(command: string): AiCommand | null {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const actionText = lines.join(" ");
 
+  if (lines.length === 1) {
+    const single = parseSingleLineCommand(text);
+    if (single) return single;
+  }
+
   const createMatch = text.match(
-    /צור\s+(?:אומן\s+)?(?:חדש\s+)?(?:בשם\s+)?["']?([^"'\n]+?)["']?(?:\s+כ|\s*$)/i,
+    /צור\s+(?:אומן\s+)?(?:חדש\s+)?(?:בשם\s+)?["']?([^"'\n]+?)["']?(?:\s|$)/i,
   );
   if (createMatch) {
     const name = cleanName(createMatch[1]);
@@ -112,7 +179,7 @@ export function parseLocalHebrewCommand(command: string): AiCommand | null {
       return {
         action: "create_artist",
         name,
-        status: parseStatus(actionText) ?? "unsigned",
+        status: parseStatus(actionText) ?? "in_process",
         isOdooApproved: /אשר\s*odoo/i.test(actionText) ? true : undefined,
       };
     }
@@ -148,8 +215,7 @@ export function parseLocalHebrewCommand(command: string): AiCommand | null {
   const odooRevoke = /בטל\s*odoo/i.test(actionText);
 
   if (entries.length > 0) {
-    const defaultStatus: ArtistStatus =
-      status ?? (entries.some((e) => e.note) ? "in_process" : "in_process");
+    const defaultStatus: ArtistStatus = status ?? "in_process";
 
     return {
       action: "upsert_by_names",

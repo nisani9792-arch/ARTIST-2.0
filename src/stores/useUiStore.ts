@@ -1,20 +1,29 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import {
+  DEFAULT_BOARD_COLUMN_ORDER,
+  DEFAULT_BOARD_COLUMN_WIDTHS,
+  migrateColumnOrder,
+  migrateColumnWidths,
+  type BoardColumnId,
+} from "@/lib/board-columns";
 import type { ArtistStatus } from "@/lib/types";
 
-export type BoardColumnStatus = Extract<ArtistStatus, "in_process" | "signed">;
+export type { BoardColumnId };
+export type BoardColumnStatus = BoardColumnId;
 export type ViewMode = "kanban" | "list";
 
-const DEFAULT_ORDER: BoardColumnStatus[] = ["signed", "in_process"];
-const DEFAULT_WIDTHS: Record<BoardColumnStatus, number> = {
-  signed: 58,
-  in_process: 42,
-};
-const MIN_COL_WIDTH = 22;
-const MAX_COL_WIDTH = 78;
+const MIN_COL_WIDTH = 18;
+const MAX_COL_WIDTH = 55;
 const MIN_VAULT_WIDTH = 18;
 const MAX_VAULT_WIDTH = 45;
 const DEFAULT_VAULT_WIDTH = 28;
+
+const emptyColumnSearch = (): Record<BoardColumnId, string> => ({
+  in_process: "",
+  signed_pending_odoo: "",
+  signed_approved: "",
+});
 
 type UiState = {
   vaultOpen: boolean;
@@ -22,27 +31,31 @@ type UiState = {
   quickEditArtistId: string | null;
   statusFilter: "all" | "signed" | "unsigned" | "in_process";
   viewMode: ViewMode;
-  mobileBoardTab: BoardColumnStatus;
-  columnOrder: BoardColumnStatus[];
-  columnWidths: Record<BoardColumnStatus, number>;
+  mobileBoardTab: BoardColumnId;
+  columnOrder: BoardColumnId[];
+  columnWidths: Record<BoardColumnId, number>;
+  columnSearch: Record<BoardColumnId, string>;
   vaultWidthPct: number;
   commandQuery: string;
+  vaultSearch: string;
   setVaultOpen: (open: boolean) => void;
   toggleVault: () => void;
   setCommandOpen: (open: boolean) => void;
   setQuickEditArtistId: (id: string | null) => void;
   setStatusFilter: (filter: UiState["statusFilter"]) => void;
   setViewMode: (mode: ViewMode) => void;
-  setMobileBoardTab: (tab: BoardColumnStatus) => void;
-  setColumnOrder: (order: BoardColumnStatus[]) => void;
-  moveColumn: (status: BoardColumnStatus, direction: -1 | 1) => void;
+  setMobileBoardTab: (tab: BoardColumnId) => void;
+  setColumnOrder: (order: BoardColumnId[]) => void;
+  moveColumn: (columnId: BoardColumnId, direction: -1 | 1) => void;
   resizeAdjacentColumns: (
-    left: BoardColumnStatus,
-    right: BoardColumnStatus,
+    left: BoardColumnId,
+    right: BoardColumnId,
     deltaPct: number,
   ) => void;
   resizeVaultWidth: (deltaPct: number) => void;
   setCommandQuery: (query: string) => void;
+  setVaultSearch: (query: string) => void;
+  setColumnSearch: (columnId: BoardColumnId, query: string) => void;
   resetColumnLayout: () => void;
 };
 
@@ -54,11 +67,13 @@ export const useUiStore = create<UiState>()(
       quickEditArtistId: null,
       statusFilter: "all",
       viewMode: "kanban",
-      mobileBoardTab: "signed",
-      columnOrder: DEFAULT_ORDER,
-      columnWidths: DEFAULT_WIDTHS,
+      mobileBoardTab: "in_process",
+      columnOrder: [...DEFAULT_BOARD_COLUMN_ORDER],
+      columnWidths: { ...DEFAULT_BOARD_COLUMN_WIDTHS },
+      columnSearch: emptyColumnSearch(),
       vaultWidthPct: DEFAULT_VAULT_WIDTH,
       commandQuery: "",
+      vaultSearch: "",
       setVaultOpen: (open) => set({ vaultOpen: open }),
       toggleVault: () => set((s) => ({ vaultOpen: !s.vaultOpen })),
       setCommandOpen: (open) => set({ commandOpen: open }),
@@ -67,9 +82,9 @@ export const useUiStore = create<UiState>()(
       setViewMode: (viewMode) => set({ viewMode }),
       setMobileBoardTab: (mobileBoardTab) => set({ mobileBoardTab }),
       setColumnOrder: (columnOrder) => set({ columnOrder }),
-      moveColumn: (status, direction) => {
+      moveColumn: (columnId, direction) => {
         const order = [...get().columnOrder];
-        const idx = order.indexOf(status);
+        const idx = order.indexOf(columnId);
         if (idx < 0) return;
         const next = idx + direction;
         if (next < 0 || next >= order.length) return;
@@ -99,10 +114,15 @@ export const useUiStore = create<UiState>()(
         set({ vaultWidthPct: next });
       },
       setCommandQuery: (commandQuery) => set({ commandQuery }),
+      setVaultSearch: (vaultSearch) => set({ vaultSearch }),
+      setColumnSearch: (columnId, query) =>
+        set((s) => ({
+          columnSearch: { ...s.columnSearch, [columnId]: query },
+        })),
       resetColumnLayout: () =>
         set({
-          columnOrder: DEFAULT_ORDER,
-          columnWidths: DEFAULT_WIDTHS,
+          columnOrder: [...DEFAULT_BOARD_COLUMN_ORDER],
+          columnWidths: { ...DEFAULT_BOARD_COLUMN_WIDTHS },
           vaultWidthPct: DEFAULT_VAULT_WIDTH,
         }),
     }),
@@ -118,6 +138,23 @@ export const useUiStore = create<UiState>()(
         viewMode: state.viewMode,
         mobileBoardTab: state.mobileBoardTab,
       }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<UiState>;
+        const columnOrder = migrateColumnOrder(p.columnOrder);
+        const columnWidths = migrateColumnWidths(p.columnWidths, columnOrder);
+        const mobileBoardTab =
+          p.mobileBoardTab && columnOrder.includes(p.mobileBoardTab)
+            ? p.mobileBoardTab
+            : columnOrder[0] ?? "in_process";
+        return {
+          ...current,
+          ...p,
+          columnOrder,
+          columnWidths,
+          mobileBoardTab,
+          columnSearch: current.columnSearch,
+        };
+      },
     },
   ),
 );

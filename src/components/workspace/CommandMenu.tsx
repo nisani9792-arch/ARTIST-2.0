@@ -59,7 +59,7 @@ export function CommandMenu({
     query.trim().length > 4 &&
     (query.includes("\n") ||
       parsedEntries.length >= 2 ||
-      /(סמן|העבר|צור|אשר|בטל|שנה|כל ה|אומנים|חתום|לא חתום|בעבודה|רשימה|הבאים)/.test(query));
+      /(סמן|העבר|צור|הוסף|להוסיף|אשר|בטל|שנה|כל ה|אומנים|חתום|לא חתום|בעבודה|רשימה|הבאים)/.test(query));
 
   if (!open) return null;
 

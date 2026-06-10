@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { parseLocalHebrewCommand } from "@/lib/ai-command-parser";
+import { LOCAL_COMMAND_HELP, parseLocalHebrewCommand } from "@/lib/ai-command-parser";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
 import {
   bulkUpdateArtists,
@@ -20,6 +20,19 @@ import { requireAccess } from "@/lib/access/require-access";
 const bodySchema = z.object({
   command: z.string().trim().min(2),
 });
+
+const USE_GEMINI_FALLBACK = process.env.AI_USE_GEMINI === "true";
+
+function friendlyAiError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (/429|quota|Too Many Requests/i.test(raw)) {
+    return "מכסת Gemini מלאה — השתמש בפורמטים המקומיים (למשל: משה לוק להוסיף אומן במצב בעבודה).";
+  }
+  if (/GoogleGenerativeAI/i.test(raw)) {
+    return "שירות AI לא זמין כרגע — נסה פקודה בפורמט המקומי.";
+  }
+  return raw || "לא הצלחתי לפרש את הפקודה";
+}
 
 function formatUpsertMessage(
   result: { updated: number; created: number; total: number },
@@ -122,24 +135,22 @@ export async function POST(request: NextRequest) {
     let parsed: AiCommand | null = parseLocalHebrewCommand(command);
 
     if (!parsed) {
-      source = "gemini";
-      if (!isGeminiConfigured()) {
-        return NextResponse.json(
-          {
-            error:
-              "לא הצלחתי לפרש את הפקודה. נסה פורמט: שורת הוראה + רשימת שמות (שורה לכל אומן), או הגדר GEMINI_API_KEY.",
-          },
-          { status: 400 },
-        );
+      if (USE_GEMINI_FALLBACK && isGeminiConfigured()) {
+        source = "gemini";
+        try {
+          const [handlers, stats] = await Promise.all([listHandlers(), getArtistStats()]);
+          parsed = await parseHebrewCommand(command, {
+            handlers,
+            unsignedCount: stats.unsigned,
+            signedCount: stats.signed,
+            inProcessCount: stats.in_process,
+          });
+        } catch (geminiError) {
+          return NextResponse.json({ error: friendlyAiError(geminiError) }, { status: 429 });
+        }
+      } else {
+        return NextResponse.json({ error: LOCAL_COMMAND_HELP }, { status: 400 });
       }
-
-      const [handlers, stats] = await Promise.all([listHandlers(), getArtistStats()]);
-      parsed = await parseHebrewCommand(command, {
-        handlers,
-        unsignedCount: stats.unsigned,
-        signedCount: stats.signed,
-        inProcessCount: stats.in_process,
-      });
     } else {
       commandSchema.parse(parsed);
     }
@@ -152,7 +163,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0]?.message }, { status: 400 });
     }
-    const message = error instanceof Error ? error.message : "לא הצלחתי לפרש את הפקודה";
+    const message = friendlyAiError(error);
     console.error("ai command failed:", error);
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -11,9 +11,15 @@ import {
 } from "@dnd-kit/core";
 import { useCallback, useRef, useState, type MouseEvent } from "react";
 import { cn } from "@/lib/cn";
-import { boardCollisionDetection, resolveBoardDropStatus } from "@/lib/kanban-dnd";
-import { STATUS_META, type Artist, type ArtistStatus } from "@/lib/types";
-import { useUiStore, type BoardColumnStatus } from "@/stores/useUiStore";
+import {
+  artistMatchesColumn,
+  BOARD_COLUMN_META,
+  filterArtistsForColumn,
+  type BoardColumnId,
+} from "@/lib/board-columns";
+import { boardCollisionDetection, resolveBoardDropColumn } from "@/lib/kanban-dnd";
+import type { Artist } from "@/lib/types";
+import { useUiStore } from "@/stores/useUiStore";
 import { selectRangeInColumn } from "./selection";
 import { ArtistCard } from "./ArtistCard";
 import { KanbanColumn } from "./KanbanColumn";
@@ -24,9 +30,15 @@ export type KanbanBoardProps = {
   onToggleSelect: (id: string) => void;
   onSetSelection: (ids: string[]) => void;
   onOpenDetail: (artist: Artist) => void;
-  onBulkStatusChange: (ids: string[], status: ArtistStatus) => void;
+  onBulkColumnChange: (ids: string[], columnId: BoardColumnId) => void;
   onContextMenu?: (artist: Artist, event: MouseEvent) => void;
   hideBoard?: boolean;
+};
+
+const mobileTabStyle: Record<BoardColumnId, string> = {
+  in_process: "bg-gradient-to-r from-amber-500 to-amber-400 text-white shadow-md",
+  signed_pending_odoo: "bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md",
+  signed_approved: "bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md",
 };
 
 export function KanbanBoard({
@@ -35,7 +47,7 @@ export function KanbanBoard({
   onToggleSelect,
   onSetSelection,
   onOpenDetail,
-  onBulkStatusChange,
+  onBulkColumnChange,
   onContextMenu,
   hideBoard = false,
 }: KanbanBoardProps) {
@@ -54,13 +66,13 @@ export function KanbanBoard({
     (a) => a.status === "in_process" || a.status === "signed",
   );
 
-  const grouped = columnOrder.map((status) => ({
-    status,
-    meta: STATUS_META[status],
-    items: boardArtists.filter((a) => a.status === status),
+  const grouped = columnOrder.map((columnId) => ({
+    columnId,
+    meta: BOARD_COLUMN_META[columnId],
+    items: filterArtistsForColumn(boardArtists, columnId),
   }));
 
-  const mobileColumn = grouped.find((g) => g.status === mobileBoardTab) ?? grouped[0];
+  const mobileColumn = grouped.find((g) => g.columnId === mobileBoardTab) ?? grouped[0];
 
   const handleSelect = useCallback(
     (columnArtists: Artist[], artist: Artist, event: MouseEvent) => {
@@ -81,23 +93,22 @@ export function KanbanBoard({
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveArtist(null);
-    const targetStatus = resolveBoardDropStatus(event);
-    if (!targetStatus) return;
+    const targetColumn = resolveBoardDropColumn(event);
+    if (!targetColumn) return;
 
     const artist = event.active.data.current?.artist as Artist | undefined;
-    if (!artist || artist.status === targetStatus) return;
+    if (!artist || artistMatchesColumn(artist, targetColumn)) return;
 
     const dragIds = selectedIds.has(artist.id) ? [...selectedIds] : [artist.id];
-    onBulkStatusChange([...new Set(dragIds)], targetStatus);
+    onBulkColumnChange([...new Set(dragIds)], targetColumn);
   };
 
-  const handleSelectAllInCol = (status: ArtistStatus, checked: boolean) => {
-    const colArtists = boardArtists.filter((a) => a.status === status);
+  const handleSelectAllInCol = (visibleArtists: Artist[], checked: boolean) => {
+    const visibleIds = new Set(visibleArtists.map((a) => a.id));
     if (checked) {
-      onSetSelection([...new Set([...selectedIds, ...colArtists.map((a) => a.id)])]);
+      onSetSelection([...new Set([...selectedIds, ...visibleIds])]);
     } else {
-      const colIds = new Set(colArtists.map((a) => a.id));
-      onSetSelection([...selectedIds].filter((id) => !colIds.has(id)));
+      onSetSelection([...selectedIds].filter((id) => !visibleIds.has(id)));
     }
   };
 
@@ -118,24 +129,22 @@ export function KanbanBoard({
       onDragEnd={handleDragEnd}
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="mb-2 flex shrink-0 gap-2 lg:hidden" role="tablist">
-          {grouped.map(({ status, meta, items }) => (
+        <div className="mb-2 flex shrink-0 gap-1.5 overflow-x-auto lg:hidden" role="tablist">
+          {grouped.map(({ columnId, meta, items }) => (
             <button
-              key={status}
+              key={columnId}
               type="button"
               role="tab"
-              aria-selected={mobileBoardTab === status}
+              aria-selected={mobileBoardTab === columnId}
               className={cn(
-                "flex-1 rounded-full px-3 py-2.5 text-xs font-bold transition",
-                mobileBoardTab === status
-                  ? status === "signed"
-                    ? "bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md"
-                    : "bg-gradient-to-r from-amber-500 to-amber-400 text-white shadow-md"
+                "shrink-0 rounded-full px-3 py-2 text-[10px] font-bold transition",
+                mobileBoardTab === columnId
+                  ? mobileTabStyle[columnId]
                   : "border border-slate-200 bg-white text-slate-600",
               )}
-              onClick={() => setMobileBoardTab(status as BoardColumnStatus)}
+              onClick={() => setMobileBoardTab(columnId)}
             >
-              {meta.label} ({items.length.toLocaleString("he-IL")})
+              {meta.shortLabel} ({items.length.toLocaleString("he-IL")})
             </button>
           ))}
         </div>
@@ -143,14 +152,13 @@ export function KanbanBoard({
         <div className="flex min-h-0 flex-1 lg:hidden">
           {mobileColumn && (
             <KanbanColumn
-              status={mobileColumn.status}
-              label={mobileColumn.meta.label}
+              columnId={mobileColumn.columnId}
               artists={mobileColumn.items}
               selectedIds={selectedIds}
               onSelectArtist={(artist, event) => handleSelect(mobileColumn.items, artist, event)}
               onOpenDetail={onOpenDetail}
               onContextMenu={onContextMenu}
-              onSelectAll={(checked) => handleSelectAllInCol(mobileColumn.status, checked)}
+              onSelectAll={(checked, visible) => handleSelectAllInCol(visible, checked)}
             />
           )}
         </div>

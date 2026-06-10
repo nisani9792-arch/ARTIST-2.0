@@ -3,14 +3,6 @@
 type WorkspaceToolbarProps = {
   operatorName?: string | null;
   search: string;
-  onSearchChange: (value: string) => void;
-  quickName: string;
-  onQuickNameChange: (value: string) => void;
-  onQuickCreate: () => void;
-  aiCommand: string;
-  onAiCommandChange: (value: string) => void;
-  onAiSubmit: () => void;
-  isAiPending: boolean;
   totalCount: number;
   selectedCount: number;
   onSelectAll: () => void;
@@ -21,14 +13,6 @@ type WorkspaceToolbarProps = {
 export function WorkspaceToolbar({
   operatorName,
   search,
-  onSearchChange,
-  quickName,
-  onQuickNameChange,
-  onQuickCreate,
-  aiCommand,
-  onAiCommandChange,
-  onAiSubmit,
-  isAiPending,
   totalCount,
   selectedCount,
   onSelectAll,
@@ -59,42 +43,12 @@ export function WorkspaceToolbar({
         <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
           <button
             type="button"
-            className="w-full min-w-0 flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-start text-sm font-medium text-slate-500 outline-none transition hover:bg-slate-200/80 focus:ring-2 focus:ring-blue-500 sm:min-w-[220px]"
+            className="w-full min-w-0 flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-start text-sm font-medium text-slate-500 outline-none transition hover:bg-slate-200/80 focus:ring-2 focus:ring-blue-500 sm:min-w-[260px]"
             onClick={() => onOpenCommandMenu?.()}
-            aria-label="חיפוש ופעולות"
+            aria-label="חיפוש ופקודות"
           >
-            {search.trim() || "חיפוש ופעולות… (Ctrl+K)"}
+            {search.trim() || "חיפוש, פקודות ורשימות… (Ctrl+K)"}
           </button>
-
-          <input
-            className="hidden w-36 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500 md:block"
-            placeholder="+ שם אומן — Enter"
-            value={quickName}
-            onChange={(e) => onQuickNameChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                onQuickCreate();
-              }
-            }}
-            aria-label="יצירה מהירה"
-          />
-
-          <textarea
-            className="hidden min-h-[2.5rem] w-48 resize-y rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 lg:block"
-            placeholder="פקודה / רשימת שמות (Ctrl+Enter)"
-            value={aiCommand}
-            onChange={(e) => onAiCommandChange(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-                e.preventDefault();
-                onAiSubmit();
-              }
-            }}
-            rows={Math.min(8, Math.max(2, aiCommand.split("\n").length + 1))}
-            disabled={isAiPending}
-            aria-label="פקודת AI"
-          />
 
           <button
             type="button"

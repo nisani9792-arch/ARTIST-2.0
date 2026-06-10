@@ -15,8 +15,16 @@ export async function GET(request: NextRequest) {
 
     let artists = await listArtists(q);
 
+    const odooParam = request.nextUrl.searchParams.get("odoo");
+
     if (statusParam === "signed" || statusParam === "unsigned" || statusParam === "in_process") {
       artists = artists.filter((a) => a.status === statusParam);
+    }
+
+    if (odooParam === "pending") {
+      artists = artists.filter((a) => a.status === "signed" && !a.isOdooApproved);
+    } else if (odooParam === "approved") {
+      artists = artists.filter((a) => a.status === "signed" && a.isOdooApproved);
     }
 
     if (scope === "selected" && idsParam) {

@@ -4,11 +4,8 @@ import {
   type CollisionDetection,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import type { Artist, ArtistStatus } from "@/lib/types";
-import type { BoardColumnStatus } from "@/stores/useUiStore";
-
-const isBoardColumn = (status: string): status is BoardColumnStatus =>
-  status === "in_process" || status === "signed";
+import type { Artist } from "@/lib/types";
+import { isBoardColumnId, type BoardColumnId } from "@/lib/board-columns";
 
 export const boardCollisionDetection: CollisionDetection = (args) => {
   const pointerHits = pointerWithin(args);
@@ -23,24 +20,20 @@ export const boardCollisionDetection: CollisionDetection = (args) => {
   return closestCorners(args);
 };
 
-export function resolveBoardDropStatus(event: DragEndEvent): BoardColumnStatus | null {
+export function resolveBoardDropColumn(event: DragEndEvent): BoardColumnId | null {
   const { over } = event;
   if (!over) return null;
 
   const data = over.data.current as
-    | { type?: string; status?: ArtistStatus; artist?: Artist }
+    | { type?: string; columnId?: BoardColumnId; artist?: Artist }
     | undefined;
 
-  if (data?.type === "artist-column" && data.status && isBoardColumn(data.status)) {
-    return data.status;
-  }
-
-  if (data?.type === "artist" && data.artist && isBoardColumn(data.artist.status)) {
-    return data.artist.status;
+  if (data?.type === "artist-column" && data.columnId && isBoardColumnId(data.columnId)) {
+    return data.columnId;
   }
 
   const raw = String(over.id);
-  if (isBoardColumn(raw)) return raw;
+  if (isBoardColumnId(raw)) return raw;
 
   return null;
 }

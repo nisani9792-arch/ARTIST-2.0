@@ -1,12 +1,13 @@
 "use client";
 
+import { useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useRef } from "react";
 import { cn } from "@/lib/cn";
-import { STATUS_META, type Artist } from "@/lib/types";
+import type { Artist } from "@/lib/types";
 import { useUiStore } from "@/stores";
+import { VaultArtistRow } from "./VaultArtistRow";
 
-const VAULT_ROW_HEIGHT = 36;
+const VAULT_ROW_HEIGHT = 40;
 
 type UnsignedVaultProps = {
   artists: Artist[];
@@ -14,6 +15,7 @@ type UnsignedVaultProps = {
   onToggleSelect: (id: string) => void;
   onOpenDetail: (artist: Artist) => void;
   embedded?: boolean;
+  draggable?: boolean;
 };
 
 export function UnsignedVault({
@@ -22,14 +24,28 @@ export function UnsignedVault({
   onToggleSelect,
   onOpenDetail,
   embedded = false,
+  draggable = false,
 }: UnsignedVaultProps) {
   const vaultOpen = useUiStore((s) => s.vaultOpen);
+  const vaultSearch = useUiStore((s) => s.vaultSearch);
+  const setVaultSearch = useUiStore((s) => s.setVaultSearch);
   const toggleVault = useUiStore((s) => s.toggleVault);
   const showPanel = embedded || vaultOpen;
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const filtered = useMemo(() => {
+    const q = vaultSearch.trim().toLowerCase();
+    if (!q) return artists;
+    return artists.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        a.handlerName.toLowerCase().includes(q) ||
+        a.notes.toLowerCase().includes(q),
+    );
+  }, [artists, vaultSearch]);
+
   const virtualizer = useVirtualizer({
-    count: artists.length,
+    count: filtered.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => VAULT_ROW_HEIGHT,
     overscan: 14,
@@ -81,7 +97,8 @@ export function UnsignedVault({
             <span className="size-1.5 rounded-full bg-slate-400" aria-hidden />
             <h2 className="text-xs font-extrabold text-slate-700">לא חתומים</h2>
             <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-gray-500 shadow-sm">
-              {artists.length.toLocaleString("he-IL")}
+              {filtered.length.toLocaleString("he-IL")}
+              {vaultSearch && ` / ${artists.length}`}
             </span>
           </div>
           <button
@@ -93,18 +110,29 @@ export function UnsignedVault({
           </button>
         </header>
 
-        <p className="text-[10px] leading-snug text-slate-500">
-          רשימה לצפייה מהירה — לחץ פעמיים לפרטים מלאים
-        </p>
+        <input
+          type="search"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-cyan-400/50"
+          placeholder="חיפוש ב-Vault…"
+          value={vaultSearch}
+          onChange={(e) => setVaultSearch(e.target.value)}
+        />
+
+        {draggable && (
+          <p className="text-[10px] leading-snug text-slate-500">
+            גרור ⠿ לעמודת חתומים / בעבודה
+          </p>
+        )}
 
         <div ref={scrollRef} className="kanban-scroll min-h-0 flex-1 overflow-y-auto">
-          {artists.length === 0 ? (
-            <p className="py-6 text-center text-[10px] text-gray-500">אין אומנים ברשימה</p>
+          {filtered.length === 0 ? (
+            <p className="py-6 text-center text-[10px] text-gray-500">
+              {vaultSearch ? "אין תוצאות בחיפוש" : "אין אומנים ברשימה"}
+            </p>
           ) : (
             <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
               {virtualizer.getVirtualItems().map((row) => {
-                const artist = artists[row.index];
-                const selected = selectedIds.has(artist.id);
+                const artist = filtered[row.index];
                 return (
                   <div
                     key={artist.id}
@@ -114,32 +142,13 @@ export function UnsignedVault({
                       transform: `translateY(${row.start}px)`,
                     }}
                   >
-                    <button
-                      type="button"
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start transition",
-                        selected
-                          ? "bg-cyan-50 ring-1 ring-cyan-200"
-                          : "hover:bg-slate-100/80",
-                      )}
-                      onClick={() => onToggleSelect(artist.id)}
-                      onDoubleClick={() => onOpenDetail(artist)}
-                      title={artist.name}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        readOnly
-                        tabIndex={-1}
-                        className="size-3 shrink-0 rounded border-slate-300 accent-cyan-600"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-800">
-                        {artist.name}
-                      </span>
-                      <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
-                        {STATUS_META[artist.status].label}
-                      </span>
-                    </button>
+                    <VaultArtistRow
+                      artist={artist}
+                      selected={selectedIds.has(artist.id)}
+                      draggable={draggable}
+                      onSelect={() => onToggleSelect(artist.id)}
+                      onOpenDetail={() => onOpenDetail(artist)}
+                    />
                   </div>
                 );
               })}

@@ -11,10 +11,10 @@ import { FoldersPanel } from "./FoldersPanel";
 import { OdooAlertBanner } from "./OdooAlertBanner";
 import { QuickEditPanel } from "./QuickEditPanel";
 import { StatusFilterPills } from "./StatusFilterPills";
-import { StatusProgressBar } from "./StatusProgressBar";
 import { TrashPanel } from "./TrashPanel";
 import { UnsignedVault } from "./UnsignedVault";
 import { ViewModeSwitcher } from "./ViewModeSwitcher";
+import { WorkspaceActionsMenu } from "./WorkspaceActionsMenu";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { DesktopWorkspaceGrid } from "./DesktopWorkspaceGrid";
 import { KanbanBoard } from "./kanban/KanbanBoard";
@@ -28,6 +28,12 @@ import { InstallPrompt } from "@/components/m3/InstallPrompt";
 import { ServiceWorkerRegister } from "@/components/m3/ServiceWorkerRegister";
 import { countOdooPending } from "@/lib/artist-stats";
 import { formatHebrewDateTime } from "@/lib/format";
+import {
+  BOARD_COLUMN_META,
+  columnDropPatch,
+  exportParamsForColumn,
+  type BoardColumnId,
+} from "@/lib/board-columns";
 import type { Artist, ArtistStatus } from "@/lib/types";
 import { STATUS_META } from "@/lib/types";
 import { useUiStore } from "@/stores";
@@ -39,9 +45,6 @@ type ArtistWorkspaceProps = {
 };
 
 export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorkspaceProps) {
-  const [search, setSearch] = useState("");
-  const [quickName, setQuickName] = useState("");
-  const [aiCommand, setAiCommand] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailArtist, setDetailArtist] = useState<Artist | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -61,13 +64,13 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
   const toggleVault = useUiStore((s) => s.toggleVault);
   const setQuickEditArtistId = useUiStore((s) => s.setQuickEditArtistId);
   const setCommandOpen = useUiStore((s) => s.setCommandOpen);
-  const setCommandQuery = useUiStore((s) => s.setCommandQuery);
+  const commandQuery = useUiStore((s) => s.commandQuery);
   const quickEditId = useUiStore((s) => s.quickEditArtistId);
   const vaultOpen = useUiStore((s) => s.vaultOpen);
 
   useArtistsSync();
 
-  const debouncedSearch = useDebouncedValue(search, 150);
+  const debouncedSearch = useDebouncedValue(commandQuery.split("\n")[0] ?? "", 150);
   const {
     artists: allArtists,
     stats,
@@ -82,7 +85,6 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     deleteArtist,
     bulkUpdate,
     runCommand,
-    isCommandPending,
   } = useArtists({ search: debouncedSearch, vaultOpen, viewMode });
 
   const { folders, createFolder } = useFolders();
@@ -128,13 +130,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     [artists],
   );
 
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
-    setCommandQuery(value);
-  };
-
   const openCommandMenu = () => {
-    setCommandQuery(search);
     setCommandOpen(true);
   };
 
@@ -170,29 +166,53 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     async (ids: string[], status: ArtistStatus) => {
       if (ids.length === 0) return;
       try {
-        await updateStatus({ ids, status });
+        if (status === "signed") {
+          await bulkUpdate({ ids, status, isOdooApproved: false });
+        } else {
+          await updateStatus({ ids, status });
+        }
         showToast(`עודכנו ${ids.length} אומנים — ${STATUS_META[status].label}`);
         setSelectedIds(new Set());
       } catch (err) {
         showToast(err instanceof Error ? err.message : "עדכון סטטוס נכשל");
       }
     },
-    [updateStatus],
+    [bulkUpdate, updateStatus],
   );
 
-  const handleExportColumn = useCallback((status: ArtistStatus) => {
-    const params = new URLSearchParams({ scope: "all", status });
-    if (debouncedSearch) params.set("q", debouncedSearch);
-    window.open(`/api/artists/export?${params}`, "_blank");
-  }, [debouncedSearch]);
+  const handleBulkColumnChange = useCallback(
+    async (ids: string[], columnId: BoardColumnId) => {
+      if (ids.length === 0) return;
+      const patch = columnDropPatch(columnId);
+      try {
+        await bulkUpdate({
+          ids,
+          status: patch.status,
+          ...(patch.isOdooApproved !== undefined
+            ? { isOdooApproved: patch.isOdooApproved }
+            : {}),
+        });
+        showToast(`עודכנו ${ids.length} אומנים — ${BOARD_COLUMN_META[columnId].label}`);
+        setSelectedIds(new Set());
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "עדכון נכשל");
+      }
+    },
+    [bulkUpdate],
+  );
+
+  const handleExportColumn = useCallback(
+    (columnId: BoardColumnId) => {
+      const params = exportParamsForColumn(columnId);
+      if (debouncedSearch) params.set("q", debouncedSearch);
+      window.open(`/api/artists/export?${params}`, "_blank");
+    },
+    [debouncedSearch],
+  );
 
   const openArtist = (artist: Artist) => {
     setQuickEditArtistId(artist.id);
     setDetailArtist(artist);
-  };
-
-  const handleQuickCreate = () => {
-    setCreateOpen(true);
   };
 
   const handleAddArtist = () => {
@@ -217,18 +237,6 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
       showToast("אישור Odoo נכשל");
     } finally {
       setOdooBulkBusy(false);
-    }
-  };
-
-  const handleAiSubmit = async () => {
-    const cmd = aiCommand.trim();
-    if (!cmd) return;
-    try {
-      const result = await runCommand(cmd);
-      setAiCommand("");
-      showToast(result.message);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "פקודה נכשלה");
     }
   };
 
@@ -324,10 +332,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
       />
       <BottomNavItem
         label="חיפוש"
-        onClick={() => {
-          setCommandQuery(search);
-          setCommandOpen(true);
-        }}
+        onClick={() => setCommandOpen(true)}
       />
       <BottomNavItem label="הוסף" onClick={handleAddArtist} />
     </div>
@@ -379,16 +384,8 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
       <div className="mx-auto flex h-full w-full max-w-[1600px] flex-col overflow-hidden">
         <WorkspaceToolbar
           operatorName={operatorName}
-          search={search}
-          onSearchChange={handleSearchChange}
+          search={commandQuery.split("\n")[0] ?? ""}
           onOpenCommandMenu={openCommandMenu}
-          quickName={quickName}
-          onQuickNameChange={setQuickName}
-          onQuickCreate={handleQuickCreate}
-          aiCommand={aiCommand}
-          onAiCommandChange={setAiCommand}
-          onAiSubmit={handleAiSubmit}
-          isAiPending={isCommandPending}
           totalCount={artists.length}
           selectedCount={selectedIds.size}
           onSelectAll={selectAllFiltered}
@@ -408,40 +405,15 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
         )}
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 md:gap-4 md:p-4">
-          <StatusProgressBar stats={stats} />
-
           <div className="flex flex-wrap items-center justify-between gap-3">
             <StatusFilterPills stats={stats} />
             <div className="flex flex-wrap items-center gap-2">
               <ViewModeSwitcher />
-              <button
-                type="button"
-                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-600 shadow-sm hover:border-blue-300"
-                onClick={handleExport}
-              >
-                ייצוא CSV
-              </button>
-              <button
-                type="button"
-                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-600 shadow-sm hover:border-blue-300"
-                onClick={() => importRef.current?.click()}
-              >
-                ייבוא CSV
-              </button>
-              <button
-                type="button"
-                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-600 shadow-sm hover:border-blue-300"
-                onClick={() => setTrashOpen(true)}
-              >
-                סל מחזור
-              </button>
-              <button
-                type="button"
-                className="hidden rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-300 hover:text-blue-700 sm:inline-flex"
-                onClick={openCommandMenu}
-              >
-                חיפוש מהיר (Ctrl+K)
-              </button>
+              <WorkspaceActionsMenu
+                onExport={handleExport}
+                onImportClick={() => importRef.current?.click()}
+                onOpenTrash={() => setTrashOpen(true)}
+              />
             </div>
           </div>
 
@@ -485,7 +457,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
                     onToggleSelect={toggleSelected}
                     onSetSelection={setSelection}
                     onOpenDetail={openArtist}
-                    onBulkStatusChange={handleBulkStatusChange}
+                    onBulkColumnChange={handleBulkColumnChange}
                     onContextMenu={handleContextMenu}
                     hideBoard={hideBoard}
                   />
@@ -505,7 +477,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
                   onToggleSelect={toggleSelected}
                   onSetSelection={setSelection}
                   onOpenDetail={openArtist}
-                  onBulkStatusChange={handleBulkStatusChange}
+                  onBulkColumnChange={handleBulkColumnChange}
                   onExportColumn={handleExportColumn}
                   onContextMenu={handleContextMenu}
                   quickEditSlot={
