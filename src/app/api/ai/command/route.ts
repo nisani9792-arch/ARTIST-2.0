@@ -10,8 +10,9 @@ import {
   markOdooByFilter,
   markSignedByFilter,
   reassignHandlerByFilter,
-  updateArtistsByNames,
+  upsertArtistsByNames,
 } from "@/lib/artists";
+import type { ArtistStatus } from "@/lib/types";
 import { type AiCommand, commandSchema, isGeminiConfigured, parseHebrewCommand } from "@/lib/gemini";
 import { STATUS_META } from "@/lib/types";
 import { requireAccess } from "@/lib/access/require-access";
@@ -19,6 +20,20 @@ import { requireAccess } from "@/lib/access/require-access";
 const bodySchema = z.object({
   command: z.string().trim().min(2),
 });
+
+function formatUpsertMessage(
+  result: { updated: number; created: number; total: number },
+  status?: ArtistStatus,
+): { affected: number; message: string } {
+  const parts: string[] = [];
+  if (result.updated > 0) parts.push(`עודכנו ${result.updated}`);
+  if (result.created > 0) parts.push(`נוצרו ${result.created}`);
+  const statusPart = status ? ` — ${STATUS_META[status].label}` : "";
+  return {
+    affected: result.total,
+    message: `${parts.join(", ")}${statusPart}`,
+  };
+}
 
 async function executeCommand(parsed: AiCommand): Promise<{ affected: number; message: string }> {
   switch (parsed.action) {
@@ -55,24 +70,32 @@ async function executeCommand(parsed: AiCommand): Promise<{ affected: number; me
       return { affected: 1, message: `נוצר אומן: ${artist.name}` };
     }
     case "update_by_names": {
-      const affected = await updateArtistsByNames({
-        names: parsed.names,
+      const result = await upsertArtistsByNames({
+        entries: parsed.names.map((name) => ({ name })),
         status: parsed.status,
         handlerName: parsed.handlerName,
         isOdooApproved: parsed.isOdooApproved,
+        createMissing: true,
       });
-      if (affected === 0) {
-        throw new Error(`לא נמצאו אומנים תואמים לשמות: ${parsed.names.slice(0, 5).join(", ")}${parsed.names.length > 5 ? "…" : ""}`);
+      if (result.total === 0) {
+        throw new Error(
+          `לא נמצאו אומנים תואמים לשמות: ${parsed.names.slice(0, 5).join(", ")}${parsed.names.length > 5 ? "…" : ""}`,
+        );
       }
-      const parts = [
-        parsed.status ? STATUS_META[parsed.status].label : null,
-        parsed.isOdooApproved !== undefined ? `Odoo ${parsed.isOdooApproved ? "אושר" : "בוטל"}` : null,
-        parsed.handlerName ? `מטפל ${parsed.handlerName}` : null,
-      ].filter(Boolean);
-      return {
-        affected,
-        message: `עודכנו ${affected} אומנים${parts.length ? ` (${parts.join(", ")})` : ""}`,
-      };
+      return formatUpsertMessage(result, parsed.status);
+    }
+    case "upsert_by_names": {
+      const result = await upsertArtistsByNames({
+        entries: parsed.entries,
+        status: parsed.status,
+        handlerName: parsed.handlerName,
+        isOdooApproved: parsed.isOdooApproved,
+        createMissing: parsed.createMissing ?? true,
+      });
+      if (result.total === 0) {
+        throw new Error("לא בוצעו פעולות — בדוק את רשימת השמות");
+      }
+      return formatUpsertMessage(result, parsed.status);
     }
     case "bulk_odoo": {
       const affected = await markOdooByFilter({

@@ -93,6 +93,7 @@ export type CreateArtistInput = {
   status?: ArtistStatus;
   handlerName?: string;
   isOdooApproved?: boolean;
+  notes?: string;
 };
 
 export async function createArtist(input: CreateArtistInput | string): Promise<Artist> {
@@ -108,11 +109,83 @@ export async function createArtist(input: CreateArtistInput | string): Promise<A
       owner: data.handlerName?.trim() || DEFAULT_HANDLER,
       isOdooApproved: data.isOdooApproved ?? false,
       songCount: 0,
-      updatedAt: new Date().toISOString(),
+      notes: data.notes?.trim() || null,
+      updatedAt: sql`NOW()`,
     })
     .returning();
 
   return toArtist(row);
+}
+
+async function findArtistByName(name: string): Promise<Artist | null> {
+  const trimmed = name.trim();
+  const [exact] = await db
+    .select()
+    .from(artists)
+    .where(and(activeArtists(), eq(artists.nameHe, trimmed)))
+    .limit(1);
+  if (exact) return toArtist(exact);
+
+  const [fuzzy] = await db
+    .select()
+    .from(artists)
+    .where(and(activeArtists(), ilike(artists.nameHe, trimmed)))
+    .limit(1);
+  if (fuzzy) return toArtist(fuzzy);
+
+  const [contains] = await db
+    .select()
+    .from(artists)
+    .where(and(activeArtists(), ilike(artists.nameHe, `%${trimmed}%`)))
+    .limit(1);
+
+  return contains ? toArtist(contains) : null;
+}
+
+export async function upsertArtistsByNames(input: {
+  entries: Array<{ name: string; note?: string }>;
+  status?: ArtistStatus;
+  handlerName?: string;
+  isOdooApproved?: boolean;
+  createMissing?: boolean;
+}): Promise<{ updated: number; created: number; total: number }> {
+  let updated = 0;
+  let created = 0;
+
+  for (const entry of input.entries) {
+    const name = entry.name.trim();
+    if (!name) continue;
+
+    const existing = await findArtistByName(name);
+
+    if (existing) {
+      const patch: ArtistPatch = {};
+      if (input.status !== undefined) patch.status = input.status;
+      if (input.handlerName !== undefined) patch.handlerName = input.handlerName;
+      if (input.isOdooApproved !== undefined) patch.isOdooApproved = input.isOdooApproved;
+      if (entry.note) {
+        patch.notes = existing.notes ? `${existing.notes}\n${entry.note}` : entry.note;
+      }
+      if (Object.keys(patch).length > 0) {
+        await updateArtist(existing.id, patch);
+        updated += 1;
+      }
+      continue;
+    }
+
+    if (input.createMissing !== false) {
+      await createArtist({
+        name,
+        status: input.status ?? "in_process",
+        handlerName: input.handlerName,
+        isOdooApproved: input.isOdooApproved,
+        notes: entry.note,
+      });
+      created += 1;
+    }
+  }
+
+  return { updated, created, total: updated + created };
 }
 
 type ArtistPatch = Partial<

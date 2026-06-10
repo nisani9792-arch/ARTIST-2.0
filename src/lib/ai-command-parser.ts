@@ -1,12 +1,19 @@
 import type { AiCommand } from "./gemini";
 import type { ArtistStatus } from "./types";
 
+export type ParsedNameEntry = {
+  name: string;
+  note?: string;
+};
+
 const INSTRUCTION_RE =
   /^(סמן|שנה|העבר|צור|אשר|בטל|רשימה|להלן|הבאים|כל|אומנים|מטפל|גורם|odoo|חתום|חתומים|לא חתום|בעבודה)/i;
 
+const NUMBERED_LINE_RE = /^\d+[\.\)]\s*.+/;
+
 function parseStatus(text: string): ArtistStatus | undefined {
   if (/לא\s*חתום/i.test(text)) return "unsigned";
-  if (/בעבודה|בתהליך|בתהליך/i.test(text)) return "in_process";
+  if (/בעבודה|בתהליך/i.test(text)) return "in_process";
   if (/חתום/i.test(text)) return "signed";
   return undefined;
 }
@@ -20,36 +27,66 @@ function cleanName(raw: string): string {
     .trim();
 }
 
-function splitNameTokens(segment: string): string[] {
-  return segment
-    .split(/[,،、\n|]+/)
-    .map((part) => cleanName(part))
-    .filter((name) => name.length >= 2);
-}
+/** Parse one line — supports "1. שם", "2. שם - הערה", bullets. */
+export function parseNameLine(line: string): ParsedNameEntry | null {
+  let trimmed = line.trim();
+  if (!trimmed || INSTRUCTION_RE.test(trimmed)) return null;
+  if (/^(כחתום|כלא חתום|לבעבודה)/i.test(trimmed)) return null;
 
-function extractNamesFromLines(lines: string[]): string[] {
-  const names: string[] = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || INSTRUCTION_RE.test(trimmed)) continue;
-    if (/^(כחתום|כלא חתום|לבעבודה)/i.test(trimmed)) continue;
-    names.push(...splitNameTokens(trimmed));
+  trimmed = trimmed.replace(/^\d+[\.\)]\s*/, "");
+
+  const noteMatch = trimmed.match(/^(.+?)\s*[-–—]\s+(.+)$/);
+  if (noteMatch) {
+    const name = cleanName(noteMatch[1]);
+    const note = noteMatch[2].trim();
+    return name.length >= 2 ? { name, note: note || undefined } : null;
   }
-  return [...new Set(names)];
+
+  const name = cleanName(trimmed);
+  return name.length >= 2 ? { name } : null;
 }
 
-function extractNamesFromSingleLine(text: string): string[] {
+export function extractEntriesFromText(text: string): ParsedNameEntry[] {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const entries: ParsedNameEntry[] = [];
+
+  for (const line of lines) {
+    const entry = parseNameLine(line);
+    if (entry) entries.push(entry);
+  }
+
+  if (entries.length === 0) {
+    for (const part of text.split(/[,،、|]+/)) {
+      const entry = parseNameLine(part);
+      if (entry) entries.push(entry);
+    }
+  }
+
+  const seen = new Set<string>();
+  return entries.filter((e) => {
+    const key = e.name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isMostlyNameList(lines: string[]): boolean {
+  if (lines.length < 2) return false;
+  const nameLike = lines.filter((l) => parseNameLine(l) || NUMBERED_LINE_RE.test(l.trim()));
+  return nameLike.length >= 2 && nameLike.length >= lines.length * 0.6;
+}
+
+function extractNamesFromSingleLine(text: string): ParsedNameEntry[] {
   const patterns = [
-    /(?:את|אתם|האומנים|הרשימה|רשימת)\s*(?:הבאים|הבאות)?\s*:?\s*(.+?)\s*(?:כ|ל|—|-)\s*(?:חתום|לא חתום|בעבודה)/i,
-    /(?:סמן|שנה|העבר)\s+(?:את\s+)?(.+?)\s+(?:כ|ל)(?:חתום|לא חתום|בעבודה)/i,
-    /:\s*(.+)$/,
+    /(?:את|אתם|האומנים|הרשימה|רשימת)\s*(?:הבאים|הבאות)?\s*:?\s*(.+)$/i,
+    /(?:סמן|שנה|העבר)\s+(?:את\s+)?(.+?)\s+(?:כ|ל)\s*(?:חתום|לא חתום|בעבודה)/i,
   ];
 
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match?.[1]) {
-      const names = splitNameTokens(match[1]);
-      if (names.length > 0) return names;
+      return extractEntriesFromText(match[1]);
     }
   }
 
@@ -57,8 +94,7 @@ function extractNamesFromSingleLine(text: string): string[] {
 }
 
 /**
- * Fast local parser for Hebrew CRM commands — especially multiline name lists.
- * Returns null when Gemini should be used as fallback.
+ * Fast local parser for Hebrew CRM commands — especially multiline / numbered name lists.
  */
 export function parseLocalHebrewCommand(command: string): AiCommand | null {
   const text = command.trim();
@@ -100,29 +136,29 @@ export function parseLocalHebrewCommand(command: string): AiCommand | null {
 
   const handlerMatch = actionText.match(/(?:מטפל|גורם מטפל)\s+["']?([^"'\n,]+?)["']?(?:\s|$|,)/i);
 
-  let names =
-    lines.length > 1
-      ? extractNamesFromLines(lines)
-      : extractNamesFromSingleLine(text);
+  let entries =
+    lines.length > 1 ? extractEntriesFromText(text) : extractNamesFromSingleLine(text);
 
-  if (names.length === 0 && lines.length > 1) {
-    names = extractNamesFromLines(lines.filter((l) => !/סמן|שנה|העבר|אשר|בטל/i.test(l)));
+  if (entries.length === 0 && isMostlyNameList(lines)) {
+    entries = extractEntriesFromText(text);
   }
 
   const status = parseStatus(actionText);
   const odooApprove = /אשר\s*odoo/i.test(actionText);
   const odooRevoke = /בטל\s*odoo/i.test(actionText);
 
-  if (names.length > 0) {
-    if (status || odooApprove || odooRevoke || handlerMatch) {
-      return {
-        action: "update_by_names",
-        names,
-        status,
-        handlerName: handlerMatch?.[1]?.trim(),
-        isOdooApproved: odooApprove ? true : odooRevoke ? false : undefined,
-      };
-    }
+  if (entries.length > 0) {
+    const defaultStatus: ArtistStatus =
+      status ?? (entries.some((e) => e.note) ? "in_process" : "in_process");
+
+    return {
+      action: "upsert_by_names",
+      entries,
+      status: status ?? defaultStatus,
+      handlerName: handlerMatch?.[1]?.trim(),
+      isOdooApproved: odooApprove ? true : odooRevoke ? false : undefined,
+      createMissing: true,
+    };
   }
 
   if (/כל\s+(?:ה)?לא\s*חתומים/i.test(actionText) && status) {

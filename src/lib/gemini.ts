@@ -100,6 +100,21 @@ export const commandSchema = z.discriminatedUnion("action", [
     isOdooApproved: z.boolean().optional(),
   }),
   z.object({
+    action: z.literal("upsert_by_names"),
+    entries: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          note: z.string().optional(),
+        }),
+      )
+      .min(1),
+    status: statusEnum.optional(),
+    handlerName: z.string().optional(),
+    isOdooApproved: z.boolean().optional(),
+    createMissing: z.boolean().optional(),
+  }),
+  z.object({
     action: z.literal("bulk_odoo"),
     isOdooApproved: z.boolean(),
     filter: z

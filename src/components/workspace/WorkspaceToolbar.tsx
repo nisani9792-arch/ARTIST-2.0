@@ -57,20 +57,14 @@ export function WorkspaceToolbar({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-          <input
-            className="w-full min-w-0 flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:ring-2 focus:ring-blue-500 sm:min-w-[220px]"
-            placeholder="חיפוש ופעולות… (Ctrl+K)"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            onFocus={() => onOpenCommandMenu?.()}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                onOpenCommandMenu?.();
-              }
-            }}
+          <button
+            type="button"
+            className="w-full min-w-0 flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-start text-sm font-medium text-slate-500 outline-none transition hover:bg-slate-200/80 focus:ring-2 focus:ring-blue-500 sm:min-w-[220px]"
+            onClick={() => onOpenCommandMenu?.()}
             aria-label="חיפוש ופעולות"
-          />
+          >
+            {search.trim() || "חיפוש ופעולות… (Ctrl+K)"}
+          </button>
 
           <input
             className="hidden w-36 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500 md:block"
@@ -97,7 +91,7 @@ export function WorkspaceToolbar({
                 onAiSubmit();
               }
             }}
-            rows={aiCommand.includes("\n") ? 4 : 1}
+            rows={Math.min(8, Math.max(2, aiCommand.split("\n").length + 1))}
             disabled={isAiPending}
             aria-label="פקודת AI"
           />
