@@ -43,15 +43,43 @@ try {
     )
   `;
 
-  console.log("migrate-all: stuck → in_process…");
-  const stuck = await sql`
-    UPDATE artists SET status = 'in_process', updated_at = NOW()
-    WHERE status = 'stuck'
-    RETURNING id
+  console.log("migrate-all: normalize statuses…");
+  await sql`
+    UPDATE artists SET status = CASE
+      WHEN LOWER(TRIM(status)) IN ('signed') THEN 'signed'
+      WHEN LOWER(TRIM(status)) IN (
+        'in_process', 'stuck', 'failed', 'in-process', 'in process', 'inprogress'
+      ) THEN 'in_process'
+      ELSE 'unsigned'
+    END,
+    updated_at = NOW()
+    WHERE status IS NULL
+      OR LOWER(TRIM(status)) NOT IN ('signed', 'unsigned', 'in_process')
+      OR status <> TRIM(status)
   `;
-  if (stuck.length > 0) {
-    console.log(`migrate-all: migrated ${stuck.length} stuck artists`);
-  }
+
+  console.log("migrate-all: rebuild status constraint…");
+  await sql`
+    DO $$
+    DECLARE r RECORD;
+    BEGIN
+      FOR r IN
+        SELECT c.conname
+        FROM pg_constraint c
+        JOIN pg_class t ON c.conrelid = t.oid
+        JOIN pg_namespace n ON t.relnamespace = n.oid
+        WHERE n.nspname = 'public'
+          AND t.relname = 'artists'
+          AND c.contype = 'c'
+      LOOP
+        EXECUTE format('ALTER TABLE artists DROP CONSTRAINT %I', r.conname);
+      END LOOP;
+    END $$;
+  `;
+  await sql`
+    ALTER TABLE artists ADD CONSTRAINT artists_status_check
+    CHECK (status IN ('signed', 'unsigned', 'in_process'))
+  `;
 
   const [{ count }] = await sql`
     SELECT COUNT(*)::int AS count FROM artists WHERE deleted_at IS NULL

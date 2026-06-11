@@ -10,6 +10,12 @@ describe("normalizeStatus", () => {
     expect(normalizeStatus("signed")).toBe("signed");
     expect(normalizeStatus("unsigned")).toBe("unsigned");
   });
+
+  it("maps legacy firebase statuses", () => {
+    expect(normalizeStatus("none")).toBe("unsigned");
+    expect(normalizeStatus("rejected")).toBe("unsigned");
+    expect(normalizeStatus("failed")).toBe("in_process");
+  });
 });
 
 describe("toArtist", () => {

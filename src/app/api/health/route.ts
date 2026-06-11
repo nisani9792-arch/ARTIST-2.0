@@ -1,7 +1,7 @@
 import { isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { runMigrations } from "@/lib/db/migrate";
+import { getStatusConstraintInfo, runMigrations } from "@/lib/db/migrate";
 import { artists } from "@/lib/db/schema";
 
 const REQUIRED_COLUMNS = [
@@ -48,11 +48,14 @@ export async function GET() {
       );
     }
 
+    const statusConstraint = await getStatusConstraintInfo();
+
     return NextResponse.json({
       ok: true,
       service: "artist-2.0",
       db: "connected",
       artistsCount,
+      statusConstraint,
     });
   } catch (error) {
     console.error("health check failed:", error);

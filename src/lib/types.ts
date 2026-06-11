@@ -40,9 +40,20 @@ export const STATUS_META: Record<ArtistStatus, { label: string; tone: string }> 
 
 export const MAIN_BOARD_STATUSES: ArtistStatus[] = ["in_process", "signed"];
 
+const IN_PROCESS_ALIASES = new Set([
+  "in_process",
+  "stuck",
+  "failed",
+  "in-process",
+  "in process",
+  "inprogress",
+  "בעבודה",
+]);
+
 export const normalizeStatus = (raw: string): ArtistStatus => {
-  if (raw === "signed") return "signed";
-  if (raw === "in_process" || raw === "stuck") return "in_process";
+  const s = (raw ?? "").trim().toLowerCase();
+  if (s === "signed") return "signed";
+  if (IN_PROCESS_ALIASES.has(s)) return "in_process";
   return "unsigned";
 };
 

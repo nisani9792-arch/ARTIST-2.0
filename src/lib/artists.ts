@@ -2,6 +2,7 @@ import { and, eq, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { normalizeArtistId } from "./artist-id";
 import { artistNameKey } from "./artist-names";
 import { db } from "./db";
+import { ensureArtistStatusSchema, fixArtistStatusConstraint } from "./db/migrate";
 import { artists, folders, type ArtistRow } from "./db/schema";
 import {
   DEFAULT_HANDLER,
@@ -52,9 +53,20 @@ export function isDbConstraintError(error: unknown): boolean {
 
 export function friendlyDbError(error: unknown): string {
   if (isDbConstraintError(error)) {
-    return "סטטוס לא תקין במסד הנתונים — המערכת מעדכנת את הסכימה, נסה שוב בעוד דקה";
+    return "שגיאת סטטוס במסד הנתונים — נסה שוב (המערכת מתקנת אוטומטית)";
   }
   return error instanceof Error ? error.message : "שגיאה בפעולה";
+}
+
+async function withStatusSchemaRetry<T>(fn: () => Promise<T>): Promise<T> {
+  await ensureArtistStatusSchema();
+  try {
+    return await fn();
+  } catch (error) {
+    if (!isDbConstraintError(error)) throw error;
+    await fixArtistStatusConstraint();
+    return await fn();
+  }
 }
 
 export type ArtistsScope = "board" | "vault" | "all";
@@ -180,6 +192,7 @@ export async function createArtist(
   input: CreateArtistInput | string,
   options?: { allowDuplicate?: boolean },
 ): Promise<Artist> {
+  await ensureArtistStatusSchema();
   const data = typeof input === "string" ? { name: input } : input;
   const name = data.name.trim();
   if (!options?.allowDuplicate) {
@@ -397,7 +410,9 @@ export async function updateArtistsStatus(
     throw new Error("לא צוינו אומנים לעדכון");
   }
 
-  const updated = await bulkUpdateArtists(uniqueIds, { status });
+  const updated = await withStatusSchemaRetry(() =>
+    bulkUpdateArtists(uniqueIds, { status }),
+  );
   const updatedIds = new Set(updated.map((a) => a.id));
   const missingIds = uniqueIds.filter((id) => !updatedIds.has(id));
 
@@ -424,36 +439,44 @@ export async function bulkUpdateArtists(
   ids: string[],
   patch: Partial<Pick<Artist, "handlerName" | "status" | "isOdooApproved" | "songCount" | "folderId">>,
 ): Promise<Artist[]> {
-  const uniqueIds = [...new Set(ids.map(normalizeArtistId).filter(Boolean))];
-  if (uniqueIds.length === 0) return [];
+  const runBulk = async () => {
+    const uniqueIds = [...new Set(ids.map(normalizeArtistId).filter(Boolean))];
+    if (uniqueIds.length === 0) return [];
 
-  const values: Record<string, unknown> = {
-    updatedAt: sql`NOW()`,
+    const values: Record<string, unknown> = {
+      updatedAt: sql`NOW()`,
+    };
+
+    if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();
+    if (patch.status !== undefined) values.status = statusForDb(patch.status);
+    if (patch.isOdooApproved !== undefined) values.isOdooApproved = patch.isOdooApproved;
+    if (patch.songCount !== undefined) values.songCount = Math.max(0, Math.floor(patch.songCount));
+    if (patch.folderId !== undefined) values.folderId = patch.folderId;
+
+    if (Object.keys(values).length <= 1) {
+      throw new Error("לא צוינו שדות לעדכון");
+    }
+
+    const allRows: ArtistRow[] = [];
+
+    for (let i = 0; i < uniqueIds.length; i += BULK_CHUNK_SIZE) {
+      const chunk = uniqueIds.slice(i, i + BULK_CHUNK_SIZE);
+      const rows = await db
+        .update(artists)
+        .set(values)
+        .where(and(inArray(artists.id, chunk), activeArtists()))
+        .returning();
+      allRows.push(...rows);
+    }
+
+    return allRows.map(toArtist);
   };
 
-  if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();
-  if (patch.status !== undefined) values.status = statusForDb(patch.status);
-  if (patch.isOdooApproved !== undefined) values.isOdooApproved = patch.isOdooApproved;
-  if (patch.songCount !== undefined) values.songCount = Math.max(0, Math.floor(patch.songCount));
-  if (patch.folderId !== undefined) values.folderId = patch.folderId;
-
-  if (Object.keys(values).length <= 1) {
-    throw new Error("לא צוינו שדות לעדכון");
+  if (patch.status !== undefined) {
+    return withStatusSchemaRetry(runBulk);
   }
 
-  const allRows: ArtistRow[] = [];
-
-  for (let i = 0; i < uniqueIds.length; i += BULK_CHUNK_SIZE) {
-    const chunk = uniqueIds.slice(i, i + BULK_CHUNK_SIZE);
-    const rows = await db
-      .update(artists)
-      .set(values)
-      .where(and(inArray(artists.id, chunk), activeArtists()))
-      .returning();
-    allRows.push(...rows);
-  }
-
-  return allRows.map(toArtist);
+  return runBulk();
 }
 
 export async function importArtistsFromRows(
