@@ -124,6 +124,9 @@ export const commandSchema = z.discriminatedUnion("action", [
       })
       .optional(),
   }),
+  z.object({
+    action: z.literal("scan_duplicates"),
+  }),
 ]);
 
 export type AiCommand = z.infer<typeof commandSchema>;

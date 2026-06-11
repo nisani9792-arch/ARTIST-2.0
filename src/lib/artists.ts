@@ -1,5 +1,6 @@
 import { and, eq, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { normalizeArtistId } from "./artist-id";
+import { artistNameKey } from "./artist-names";
 import { db } from "./db";
 import { artists, folders, type ArtistRow } from "./db/schema";
 import {
@@ -18,6 +19,42 @@ const activeArtists = () => isNull(artists.deletedAt);
 /** Neon legacy schema requires NOT NULL on text fields — never write null. */
 function textOrEmpty(value: string | null | undefined): string {
   return value?.trim() ?? "";
+}
+
+function statusForDb(
+  status: ArtistStatus | string | undefined,
+  fallback: ArtistStatus = "unsigned",
+): ArtistStatus {
+  if (status === undefined) return fallback;
+  return normalizeStatus(status);
+}
+
+export class DuplicateArtistError extends Error {
+  existing: Artist;
+
+  constructor(existing: Artist) {
+    super(`אומן בשם "${existing.name}" כבר קיים במערכת`);
+    this.name = "DuplicateArtistError";
+    this.existing = existing;
+  }
+}
+
+export type DuplicateGroup = {
+  key: string;
+  name: string;
+  artists: Artist[];
+};
+
+export function isDbConstraintError(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error);
+  return /artists_status_check|violates check constraint/i.test(raw);
+}
+
+export function friendlyDbError(error: unknown): string {
+  if (isDbConstraintError(error)) {
+    return "סטטוס לא תקין במסד הנתונים — המערכת מעדכנת את הסכימה, נסה שוב בעוד דקה";
+  }
+  return error instanceof Error ? error.message : "שגיאה בפעולה";
 }
 
 export type ArtistsScope = "board" | "vault" | "all";
@@ -103,16 +140,59 @@ export type CreateArtistInput = {
   tag?: string;
 };
 
-export async function createArtist(input: CreateArtistInput | string): Promise<Artist> {
+export async function getArtistById(id: string): Promise<Artist | null> {
+  const artistId = normalizeArtistId(id);
+  const [row] = await db
+    .select()
+    .from(artists)
+    .where(and(eq(artists.id, artistId), activeArtists()))
+    .limit(1);
+  return row ? toArtist(row) : null;
+}
+
+export async function findArtistByNormalizedName(name: string): Promise<Artist | null> {
+  const trimmed = name.trim();
+  const key = artistNameKey(trimmed);
+  if (!key) return null;
+
+  const [exact] = await db
+    .select()
+    .from(artists)
+    .where(and(activeArtists(), eq(artists.nameHe, trimmed)))
+    .limit(1);
+  if (exact) return toArtist(exact);
+
+  const [fuzzy] = await db
+    .select()
+    .from(artists)
+    .where(and(activeArtists(), ilike(artists.nameHe, trimmed)))
+    .limit(1);
+  if (fuzzy && artistNameKey(fuzzy.nameHe) === key) return toArtist(fuzzy);
+
+  const rows = await db.select().from(artists).where(activeArtists());
+  for (const row of rows) {
+    if (artistNameKey(row.nameHe) === key) return toArtist(row);
+  }
+  return null;
+}
+
+export async function createArtist(
+  input: CreateArtistInput | string,
+  options?: { allowDuplicate?: boolean },
+): Promise<Artist> {
   const data = typeof input === "string" ? { name: input } : input;
   const name = data.name.trim();
+  if (!options?.allowDuplicate) {
+    const existing = await findArtistByNormalizedName(name);
+    if (existing) throw new DuplicateArtistError(existing);
+  }
   const id = crypto.randomUUID();
   const [row] = await db
     .insert(artists)
     .values({
       id,
       nameHe: name,
-      status: data.status ?? "unsigned",
+      status: statusForDb(data.status, "unsigned"),
       owner: data.handlerName?.trim() || DEFAULT_HANDLER,
       isOdooApproved: data.isOdooApproved ?? false,
       songCount: 0,
@@ -126,50 +206,24 @@ export async function createArtist(input: CreateArtistInput | string): Promise<A
   return toArtist(row);
 }
 
-async function findArtistByName(name: string): Promise<Artist | null> {
-  const trimmed = name.trim();
-  const [exact] = await db
-    .select()
-    .from(artists)
-    .where(and(activeArtists(), eq(artists.nameHe, trimmed)))
-    .limit(1);
-  if (exact) return toArtist(exact);
-
-  const [fuzzy] = await db
-    .select()
-    .from(artists)
-    .where(and(activeArtists(), ilike(artists.nameHe, trimmed)))
-    .limit(1);
-  if (fuzzy) return toArtist(fuzzy);
-
-  const [contains] = await db
-    .select()
-    .from(artists)
-    .where(and(activeArtists(), ilike(artists.nameHe, `%${trimmed}%`)))
-    .limit(1);
-
-  return contains ? toArtist(contains) : null;
-}
-
 async function findArtistsByNames(names: string[]): Promise<Map<string, Artist>> {
   const unique = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
   const result = new Map<string, Artist>();
   if (unique.length === 0) return result;
 
-  const exactRows = await db
-    .select()
-    .from(artists)
-    .where(and(activeArtists(), inArray(artists.nameHe, unique)));
-
-  for (const row of exactRows) {
-    result.set(row.nameHe.toLowerCase(), toArtist(row));
+  const rows = await db.select().from(artists).where(activeArtists());
+  const byNormalizedKey = new Map<string, Artist>();
+  for (const row of rows) {
+    const key = artistNameKey(row.nameHe);
+    if (key && !byNormalizedKey.has(key)) {
+      byNormalizedKey.set(key, toArtist(row));
+    }
   }
 
   for (const name of unique) {
-    const key = name.toLowerCase();
-    if (result.has(key)) continue;
-    const found = await findArtistByName(name);
-    if (found) result.set(key, found);
+    const lookupKey = artistNameKey(name);
+    const found = byNormalizedKey.get(lookupKey);
+    if (found) result.set(name.toLowerCase(), found);
   }
 
   return result;
@@ -181,9 +235,15 @@ export async function upsertArtistsByNames(input: {
   handlerName?: string;
   isOdooApproved?: boolean;
   createMissing?: boolean;
-}): Promise<{ updated: number; created: number; total: number }> {
+}): Promise<{
+  updated: number;
+  created: number;
+  total: number;
+  matchedExisting: number;
+}> {
   let updated = 0;
   let created = 0;
+  let matchedExisting = 0;
 
   const resolvedOdoo =
     input.status === "signed" && input.isOdooApproved === undefined
@@ -200,6 +260,7 @@ export async function upsertArtistsByNames(input: {
     const existing = existingByName.get(name.toLowerCase());
 
     if (existing) {
+      matchedExisting += 1;
       const patch: ArtistPatch = {};
       if (input.status !== undefined) patch.status = input.status;
       if (input.handlerName !== undefined) patch.handlerName = input.handlerName;
@@ -226,7 +287,56 @@ export async function upsertArtistsByNames(input: {
     }
   }
 
-  return { updated, created, total: updated + created };
+  return { updated, created, total: updated + created, matchedExisting };
+}
+
+const STATUS_PRIORITY: Record<ArtistStatus, number> = {
+  signed: 3,
+  in_process: 2,
+  unsigned: 1,
+};
+
+export async function mergeArtistsIntoKeep(
+  keepId: string,
+  removeIds: string[],
+): Promise<Artist> {
+  const keep = await getArtistById(keepId);
+  if (!keep) throw new Error("אומן לשמירה לא נמצא");
+
+  const toRemove = [...new Set(removeIds.map(normalizeArtistId).filter((id) => id !== keepId))];
+  if (toRemove.length === 0) return keep;
+
+  let mergedStatus = keep.status;
+  let mergedNotes = keep.notes;
+  let mergedOdoo = keep.isOdooApproved;
+
+  for (const dupId of toRemove) {
+    const dup = await getArtistById(dupId);
+    if (!dup) continue;
+
+    if (STATUS_PRIORITY[dup.status] > STATUS_PRIORITY[mergedStatus]) {
+      mergedStatus = dup.status;
+    }
+    if (dup.isOdooApproved) mergedOdoo = true;
+    if (dup.notes?.trim()) {
+      const note = dup.notes.trim();
+      mergedNotes = mergedNotes?.includes(note)
+        ? mergedNotes
+        : mergedNotes
+          ? `${mergedNotes}\n---\n${note}`
+          : note;
+    }
+
+    await softDeleteArtist(dupId);
+  }
+
+  return (
+    (await updateArtist(keepId, {
+      status: mergedStatus,
+      isOdooApproved: mergedOdoo,
+      notes: mergedNotes,
+    })) ?? keep
+  );
 }
 
 type ArtistPatch = Partial<
@@ -252,7 +362,7 @@ export async function updateArtist(id: string, patch: ArtistPatch): Promise<Arti
   };
 
   if (patch.name !== undefined) values.nameHe = patch.name.trim();
-  if (patch.status !== undefined) values.status = patch.status;
+  if (patch.status !== undefined) values.status = statusForDb(patch.status);
   if (patch.isOdooApproved !== undefined) values.isOdooApproved = patch.isOdooApproved;
   if (patch.songCount !== undefined) values.songCount = Math.max(0, Math.floor(patch.songCount));
   if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();
@@ -322,7 +432,7 @@ export async function bulkUpdateArtists(
   };
 
   if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();
-  if (patch.status !== undefined) values.status = patch.status;
+  if (patch.status !== undefined) values.status = statusForDb(patch.status);
   if (patch.isOdooApproved !== undefined) values.isOdooApproved = patch.isOdooApproved;
   if (patch.songCount !== undefined) values.songCount = Math.max(0, Math.floor(patch.songCount));
   if (patch.folderId !== undefined) values.folderId = patch.folderId;
@@ -435,7 +545,7 @@ export async function markSignedByFilter(input: {
   const rows = await db
     .update(artists)
     .set({
-      status: input.status,
+      status: statusForDb(input.status),
       updatedAt: new Date().toISOString(),
     })
     .where(and(...conditions))
@@ -456,7 +566,7 @@ export async function updateArtistsByNames(input: {
   const values: Record<string, unknown> = {
     updatedAt: sql`NOW()`,
   };
-  if (input.status !== undefined) values.status = input.status;
+  if (input.status !== undefined) values.status = statusForDb(input.status);
   if (input.isOdooApproved !== undefined) values.isOdooApproved = input.isOdooApproved;
   if (input.handlerName !== undefined) values.owner = input.handlerName.trim();
 

@@ -48,7 +48,22 @@ export async function runMigrations(): Promise<void> {
   `);
   await db.execute(sql`
     UPDATE artists SET status = 'in_process', updated_at = NOW()
-    WHERE status = 'stuck'
+    WHERE status IN ('stuck', 'failed')
+  `);
+  await db.execute(sql`
+    UPDATE artists SET status = 'unsigned', updated_at = NOW()
+    WHERE status IN ('none', 'rejected', '') OR status IS NULL
+  `);
+  await db.execute(sql`
+    UPDATE artists SET status = 'unsigned', updated_at = NOW()
+    WHERE status NOT IN ('signed', 'unsigned', 'in_process')
+  `);
+  await db.execute(sql`
+    ALTER TABLE artists DROP CONSTRAINT IF EXISTS artists_status_check
+  `);
+  await db.execute(sql`
+    ALTER TABLE artists ADD CONSTRAINT artists_status_check
+    CHECK (status IN ('signed', 'unsigned', 'in_process'))
   `);
   await db.execute(sql`
     UPDATE artists SET notes = '' WHERE notes IS NULL

@@ -219,6 +219,8 @@ export function describeCommandPreview(command: string): string | null {
       return `עדכון סטטוס → ${STATUS_LABEL[parsed.status]}`;
     case "bulk_odoo":
       return parsed.isOdooApproved ? "אישור Odoo" : "ביטול Odoo";
+    case "scan_duplicates":
+      return "סריקת כפילויות שמות";
     case "reassign_handler":
       return `שינוי מטפל → ${parsed.toHandler}`;
     default:
@@ -237,7 +239,8 @@ export const LOCAL_COMMAND_HELP = `לא הבנתי את הפקודה. דוגמא
 • סמן כחתום:
   1. משה לוק
   2. דני כהן
-• סמן את דני כהן כחתום`;
+• סמן את דני כהן כחתום
+• מצא כפילויות`;
 
 /**
  * Fast local parser for Hebrew CRM commands — no Gemini required.
@@ -286,6 +289,13 @@ export function parseLocalHebrewCommand(command: string): AiCommand | null {
       isOdooApproved: false,
       filter: { status: parseStatus(actionText) },
     };
+  }
+
+  if (
+    /כפילות|כפילויות|כפולים/i.test(actionText) &&
+    /(מצא|בדוק|סרוק|חפש|הצג|רשימת|תמצא)/i.test(actionText)
+  ) {
+    return { action: "scan_duplicates" };
   }
 
   const handlerMatch = actionText.match(/(?:מטפל|גורם מטפל)\s+["']?([^"'\n,]+?)["']?(?:\s|$|,)/i);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
-import { bulkUpdateArtists } from "@/lib/artists";
+import { bulkUpdateArtists, friendlyDbError } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
 
 const bulkSchema = z
@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0]?.message }, { status: 400 });
     }
-    const message = error instanceof Error ? error.message : "שגיאה בעדכון מרובה";
+    const message = friendlyDbError(error);
     console.error("bulk update failed:", error);
     return NextResponse.json({ error: message }, { status: 500 });
   }

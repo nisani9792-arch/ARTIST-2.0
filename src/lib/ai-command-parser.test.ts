@@ -129,6 +129,11 @@ describe("parseLocalHebrewCommand", () => {
     expect(describeCommandPreview("סמן כחתום\n1. אבי\n2. דני")).toMatch(/2 שמות/);
   });
 
+  it("parses duplicate scan command", () => {
+    expect(parseLocalHebrewCommand("מצא כפילויות")?.action).toBe("scan_duplicates");
+    expect(parseLocalHebrewCommand("בדוק כפילויות שמות")?.action).toBe("scan_duplicates");
+  });
+
   it("parses odoo-pending signed list command", () => {
     const cmd = `להכניס ברשימה חתומים ממתין לאישור באודו
 1. משה לוק

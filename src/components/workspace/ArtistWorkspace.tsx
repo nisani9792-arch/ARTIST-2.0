@@ -13,6 +13,7 @@ import { StatusFilterPills } from "./StatusFilterPills";
 import { TrashPanel } from "./TrashPanel";
 import { UnsignedVault } from "./UnsignedVault";
 import { ViewModeSwitcher } from "./ViewModeSwitcher";
+import { DuplicatesPanel } from "./DuplicatesPanel";
 import { WorkspaceActionsMenu } from "./WorkspaceActionsMenu";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { DesktopWorkspaceGrid } from "./DesktopWorkspaceGrid";
@@ -205,8 +206,13 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
   };
 
   const handleCreateArtist = async (input: Parameters<typeof createArtist>[0]) => {
-    const artist = await createArtist(input);
-    showToast(`נוצר: ${artist.name}`);
+    try {
+      const artist = await createArtist(input);
+      showToast(`נוצר: ${artist.name}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "יצירה נכשלה");
+      throw err;
+    }
   };
 
   const handleBulkOdoo = useCallback(
@@ -383,6 +389,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
               <div className="hidden lg:block">
                 <ViewModeSwitcher />
               </div>
+              <DuplicatesPanel onMerged={() => void refetch()} />
               <WorkspaceActionsMenu
                 onExport={handleExport}
                 onImportClick={() => importRef.current?.click()}

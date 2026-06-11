@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { LOCAL_COMMAND_HELP, parseLocalHebrewCommand } from "@/lib/ai-command-parser";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
+import { findDuplicateGroups, scanNamesForDuplicates } from "@/lib/artist-duplicates";
 import {
   bulkUpdateArtists,
-  createArtist,
+  friendlyDbError,
   getArtistStats,
   listHandlers,
   markOdooByFilter,
@@ -35,16 +36,24 @@ function friendlyAiError(error: unknown): string {
 }
 
 function formatUpsertMessage(
-  result: { updated: number; created: number; total: number },
+  result: { updated: number; created: number; total: number; matchedExisting?: number },
   status?: ArtistStatus,
+  duplicateHints?: string[],
 ): { affected: number; message: string } {
   const parts: string[] = [];
   if (result.updated > 0) parts.push(`עודכנו ${result.updated}`);
   if (result.created > 0) parts.push(`נוצרו ${result.created}`);
+  if (result.matchedExisting && result.matchedExisting > result.updated) {
+    parts.push(`זוהו ${result.matchedExisting} שמות קיימים (ללא שינוי)`);
+  }
   const statusPart = status ? ` — ${STATUS_META[status].label}` : "";
+  const dupePart =
+    duplicateHints && duplicateHints.length > 0
+      ? ` | כפילויות: ${duplicateHints.slice(0, 3).join("; ")}${duplicateHints.length > 3 ? "…" : ""}`
+      : "";
   return {
     affected: result.total,
-    message: `${parts.join(", ")}${statusPart}`,
+    message: `${parts.join(", ")}${statusPart}${dupePart}`,
   };
 }
 
@@ -74,13 +83,17 @@ async function executeCommand(parsed: AiCommand): Promise<{ affected: number; me
       return { affected: parsed.ids.length, message: `עודכנו ${parsed.ids.length} אומנים — מטפל: ${parsed.handlerName}` };
     }
     case "create_artist": {
-      const artist = await createArtist({
-        name: parsed.name,
+      const result = await upsertArtistsByNames({
+        entries: [{ name: parsed.name }],
         status: parsed.status,
         handlerName: parsed.handlerName,
         isOdooApproved: parsed.isOdooApproved,
+        createMissing: true,
       });
-      return { affected: 1, message: `נוצר אומן: ${artist.name}` };
+      if (result.total === 0) {
+        throw new Error(`לא ניתן ליצור אומן: ${parsed.name}`);
+      }
+      return formatUpsertMessage(result, parsed.status);
     }
     case "update_by_names": {
       const result = await upsertArtistsByNames({
@@ -98,6 +111,12 @@ async function executeCommand(parsed: AiCommand): Promise<{ affected: number; me
       return formatUpsertMessage(result, parsed.status);
     }
     case "upsert_by_names": {
+      const names = parsed.entries.map((e) => e.name);
+      const duplicateScan = await scanNamesForDuplicates(names);
+      const duplicateHints = duplicateScan.map(
+        (d) => `${d.input} → ${d.matches.join(" / ")}`,
+      );
+
       const result = await upsertArtistsByNames({
         entries: parsed.entries,
         status: parsed.status,
@@ -108,7 +127,22 @@ async function executeCommand(parsed: AiCommand): Promise<{ affected: number; me
       if (result.total === 0) {
         throw new Error("לא בוצעו פעולות — בדוק את רשימת השמות");
       }
-      return formatUpsertMessage(result, parsed.status);
+      return formatUpsertMessage(result, parsed.status, duplicateHints);
+    }
+    case "scan_duplicates": {
+      const groups = await findDuplicateGroups();
+      const duplicateCount = groups.reduce((sum, g) => sum + g.artists.length - 1, 0);
+      if (duplicateCount === 0) {
+        return { affected: 0, message: "לא נמצאו כפילויות שמות" };
+      }
+      const preview = groups
+        .slice(0, 5)
+        .map((g) => `${g.name} (${g.artists.length})`)
+        .join(", ");
+      return {
+        affected: duplicateCount,
+        message: `נמצאו ${groups.length} קבוצות כפילות (${duplicateCount} רשומות מיותרות): ${preview}${groups.length > 5 ? "…" : ""}`,
+      };
     }
     case "bulk_odoo": {
       const affected = await markOdooByFilter({
@@ -163,7 +197,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0]?.message }, { status: 400 });
     }
-    const message = friendlyAiError(error);
+    const message = friendlyDbError(error) || friendlyAiError(error);
     console.error("ai command failed:", error);
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
-import { createArtist, getArtistStats, listArtists, type ArtistsScope } from "@/lib/artists";
+import {
+  createArtist,
+  DuplicateArtistError,
+  getArtistStats,
+  listArtists,
+  type ArtistsScope,
+} from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
 
 const scopeValues = ["board", "vault", "all"] as const;
@@ -47,6 +53,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0]?.message }, { status: 400 });
+    }
+    if (error instanceof DuplicateArtistError) {
+      return NextResponse.json(
+        { error: error.message, existing: error.existing },
+        { status: 409 },
+      );
     }
     console.error(error);
     return NextResponse.json({ error: "שגיאה ביצירת אומן" }, { status: 500 });
