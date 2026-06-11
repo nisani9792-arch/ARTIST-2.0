@@ -47,7 +47,7 @@ export function VaultArtistRow({
           {...listeners}
           {...attributes}
           aria-label={`גרור ${artist.name}`}
-          title="גרור לעמודה"
+          title="החזק חצי שנייה לגרירה"
         >
           ⠿
         </button>

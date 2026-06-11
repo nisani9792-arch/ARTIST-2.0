@@ -102,18 +102,18 @@ export function KanbanColumn({
       )}
     >
       {!hideHeader && (
-        <header className="flex shrink-0 flex-col gap-2 border-b border-slate-200/70 pb-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className={cn("size-2 shrink-0 rounded-full", columnDot[tone])} aria-hidden />
+        <header className="flex shrink-0 flex-col gap-1.5 border-b border-slate-200/70 pb-2 lg:gap-2 lg:pb-2.5">
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className={cn("size-1.5 shrink-0 rounded-full lg:size-2", columnDot[tone])} aria-hidden />
               <h2
                 className={cn(
-                  "truncate text-sm font-extrabold tracking-tight",
+                  "truncate text-xs font-extrabold tracking-tight lg:text-sm",
                   columnHeaderAccent[tone],
                 )}
                 title={meta.label}
               >
-                {meta.label}
+                {meta.shortLabel}
               </h2>
               <span className="shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-slate-600 shadow-sm">
                 {filtered.length.toLocaleString("he-IL")}
@@ -148,8 +148,8 @@ export function KanbanColumn({
 
           <input
             type="search"
-            className="w-full rounded-xl border border-slate-200/80 bg-white/90 px-3 py-1.5 text-[11px] outline-none focus:ring-2 focus:ring-cyan-400/40"
-            placeholder={`חיפוש ב${meta.shortLabel}…`}
+            className="w-full rounded-lg border border-slate-200/80 bg-white/90 px-2.5 py-1 text-[11px] outline-none focus:ring-2 focus:ring-cyan-400/40 lg:rounded-xl lg:px-3 lg:py-1.5"
+            placeholder={`חיפוש…`}
             value={columnSearch}
             onChange={(e) => setColumnSearch(columnId, e.target.value)}
           />

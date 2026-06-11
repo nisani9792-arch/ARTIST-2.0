@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  describeCommandPreview,
   extractEntriesFromText,
   parseLocalHebrewCommand,
   parseNameLine,
   parseSingleLineCommand,
+  stripLeadingInstructionLines,
 } from "./ai-command-parser";
 
 describe("parseNameLine", () => {
@@ -41,12 +43,13 @@ describe("parseSingleLineCommand", () => {
     }
   });
 
-  it("parses mark as signed", () => {
+  it("parses mark as signed with odoo pending default", () => {
     const result = parseSingleLineCommand("סמן את דני כהן כחתום");
     expect(result?.action).toBe("upsert_by_names");
     if (result?.action === "upsert_by_names") {
       expect(result.entries[0].name).toBe("דני כהן");
       expect(result.status).toBe("signed");
+      expect(result.isOdooApproved).toBe(false);
     }
   });
 
@@ -104,5 +107,25 @@ describe("parseLocalHebrewCommand", () => {
       isOdooApproved: true,
       filter: { status: "signed" },
     });
+  });
+
+  it("strips instruction line before numbered list", () => {
+    const cmd = `סמן כחתום
+1. משה לוק
+2. דני כהן`;
+    const { instruction, body } = stripLeadingInstructionLines(cmd);
+    expect(instruction).toMatch(/סמן כחתום/);
+    expect(body).toContain("משה לוק");
+    const result = parseLocalHebrewCommand(cmd);
+    expect(result?.action).toBe("upsert_by_names");
+    if (result?.action === "upsert_by_names") {
+      expect(result.entries).toHaveLength(2);
+      expect(result.status).toBe("signed");
+      expect(result.isOdooApproved).toBe(false);
+    }
+  });
+
+  it("describes command preview", () => {
+    expect(describeCommandPreview("סמן כחתום\n1. אבי\n2. דני")).toMatch(/2 שמות/);
   });
 });

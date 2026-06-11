@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
+import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { useCallback, useRef, useState, type MouseEvent } from "react";
 import { cn } from "@/lib/cn";
 import {
@@ -18,6 +10,7 @@ import {
   type BoardColumnId,
 } from "@/lib/board-columns";
 import { boardCollisionDetection, resolveBoardDropColumn } from "@/lib/kanban-dnd";
+import { useBoardSensors } from "@/lib/useBoardSensors";
 import type { Artist } from "@/lib/types";
 import { useUiStore } from "@/stores/useUiStore";
 import { selectRangeInColumn } from "./selection";
@@ -58,9 +51,7 @@ export function KanbanBoard({
   const mobileBoardTab = useUiStore((s) => s.mobileBoardTab);
   const setMobileBoardTab = useUiStore((s) => s.setMobileBoardTab);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useBoardSensors();
 
   const boardArtists = artists.filter(
     (a) => a.status === "in_process" || a.status === "signed",

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { encodeArtistIdForPath } from "@/lib/artist-id";
 import { loadArtistsCache, saveArtistsCache } from "@/lib/artists-cache";
+import { markLocalMutation } from "@/lib/mutation-sync";
 import type { Artist, ArtistStats, ArtistStatus } from "@/lib/types";
 import type { ViewMode } from "@/stores/useUiStore";
 
@@ -210,8 +211,14 @@ export function useArtists({ search, vaultOpen, viewMode }: UseArtistsOptions) {
       }
       return (await res.json()).artist as Artist;
     },
-    onMutate: async ({ id, patch }) => applyOptimisticPatch(new Set([id]), patch),
-    onSuccess: (artist) => patchAllCaches(new Set([artist.id]), artist),
+    onMutate: async ({ id, patch }) => {
+      markLocalMutation();
+      return applyOptimisticPatch(new Set([id]), patch);
+    },
+    onSuccess: (artist) => {
+      markLocalMutation();
+      patchAllCaches(new Set([artist.id]), artist);
+    },
     onError: (_err, _vars, context) => {
       context?.previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
     },
@@ -231,11 +238,14 @@ export function useArtists({ search, vaultOpen, viewMode }: UseArtistsOptions) {
       if (!res.ok) throw new Error(body.error || "עדכון סטטוס נכשל");
       return { ids, status, count: body.count ?? ids.length };
     },
-    onMutate: async ({ ids, status }) =>
-      applyOptimisticPatch(new Set(ids), {
+    onMutate: async ({ ids, status }) => {
+      markLocalMutation();
+      return applyOptimisticPatch(new Set(ids), {
         status,
         lastActionTimestamp: new Date().toISOString(),
-      }),
+      });
+    },
+    onSuccess: () => markLocalMutation(),
     onError: (_err, _vars, context) => {
       context?.previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
     },
@@ -283,13 +293,24 @@ export function useArtists({ search, vaultOpen, viewMode }: UseArtistsOptions) {
       return res.json();
     },
     onMutate: async ({ ids, status, handlerName, isOdooApproved, songCount }) => {
-      const patch: Partial<Artist> = {};
+      markLocalMutation();
+      const patch: Partial<Artist> = {
+        lastActionTimestamp: new Date().toISOString(),
+      };
       if (status !== undefined) patch.status = status;
       if (handlerName !== undefined) patch.handlerName = handlerName;
       if (isOdooApproved !== undefined) patch.isOdooApproved = isOdooApproved;
       if (songCount !== undefined) patch.songCount = songCount;
-      if (Object.keys(patch).length === 0) return undefined;
       return applyOptimisticPatch(new Set(ids), patch);
+    },
+    onSuccess: (data) => {
+      markLocalMutation();
+      const artists = (data as { artists?: Artist[] }).artists;
+      if (artists?.length) {
+        for (const artist of artists) {
+          patchAllCaches(new Set([artist.id]), artist);
+        }
+      }
     },
     onError: (_err, _vars, context) => {
       context?.previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
@@ -321,9 +342,10 @@ export function useArtists({ search, vaultOpen, viewMode }: UseArtistsOptions) {
       return data as { message: string; affected: number };
     },
     onSuccess: () => {
+      markLocalMutation();
       window.setTimeout(() => {
-        void queryClient.invalidateQueries({ queryKey: ["artists"] });
-      }, 1500);
+        void queryClient.invalidateQueries({ queryKey: ["artists"], refetchType: "active" });
+      }, 600);
     },
   });
 

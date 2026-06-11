@@ -142,6 +142,30 @@ async function findArtistByName(name: string): Promise<Artist | null> {
   return contains ? toArtist(contains) : null;
 }
 
+async function findArtistsByNames(names: string[]): Promise<Map<string, Artist>> {
+  const unique = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  const result = new Map<string, Artist>();
+  if (unique.length === 0) return result;
+
+  const exactRows = await db
+    .select()
+    .from(artists)
+    .where(and(activeArtists(), inArray(artists.nameHe, unique)));
+
+  for (const row of exactRows) {
+    result.set(row.nameHe.toLowerCase(), toArtist(row));
+  }
+
+  for (const name of unique) {
+    const key = name.toLowerCase();
+    if (result.has(key)) continue;
+    const found = await findArtistByName(name);
+    if (found) result.set(key, found);
+  }
+
+  return result;
+}
+
 export async function upsertArtistsByNames(input: {
   entries: Array<{ name: string; note?: string }>;
   status?: ArtistStatus;
@@ -152,17 +176,25 @@ export async function upsertArtistsByNames(input: {
   let updated = 0;
   let created = 0;
 
+  const resolvedOdoo =
+    input.status === "signed" && input.isOdooApproved === undefined
+      ? false
+      : input.isOdooApproved;
+
+  const names = input.entries.map((e) => e.name.trim()).filter(Boolean);
+  const existingByName = await findArtistsByNames(names);
+
   for (const entry of input.entries) {
     const name = entry.name.trim();
     if (!name) continue;
 
-    const existing = await findArtistByName(name);
+    const existing = existingByName.get(name.toLowerCase());
 
     if (existing) {
       const patch: ArtistPatch = {};
       if (input.status !== undefined) patch.status = input.status;
       if (input.handlerName !== undefined) patch.handlerName = input.handlerName;
-      if (input.isOdooApproved !== undefined) patch.isOdooApproved = input.isOdooApproved;
+      if (resolvedOdoo !== undefined) patch.isOdooApproved = resolvedOdoo;
       if (entry.note) {
         patch.notes = existing.notes ? `${existing.notes}\n${entry.note}` : entry.note;
       }
@@ -178,7 +210,7 @@ export async function upsertArtistsByNames(input: {
         name,
         status: input.status ?? "in_process",
         handlerName: input.handlerName,
-        isOdooApproved: input.isOdooApproved,
+        isOdooApproved: resolvedOdoo,
         notes: entry.note,
       });
       created += 1;

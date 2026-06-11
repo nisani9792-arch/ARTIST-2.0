@@ -3,7 +3,6 @@ import { z } from "zod";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
 import { bulkUpdateArtists } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
-import { runMigrations } from "@/lib/db/migrate";
 
 const bulkSchema = z
   .object({
@@ -26,7 +25,6 @@ export async function PATCH(request: NextRequest) {
   try {
     const access = await requireAccess();
     if (!access.ok) return access.response;
-    await runMigrations();
     const body = bulkSchema.parse(await request.json());
     const artists = await bulkUpdateArtists(body.ids, {
       handlerName: body.handlerName,

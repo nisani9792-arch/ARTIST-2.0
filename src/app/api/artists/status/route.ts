@@ -3,7 +3,6 @@ import { z } from "zod";
 import { broadcastArtistsChanged } from "@/lib/artists-events";
 import { updateArtistsStatus } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
-import { runMigrations } from "@/lib/db/migrate";
 
 const statusSchema = z.object({
   ids: z.array(z.string().min(1)).min(1, "חובה לציין לפחות אומן אחד"),
@@ -16,7 +15,6 @@ export async function POST(request: NextRequest) {
     const access = await requireAccess();
     if (!access.ok) return access.response;
 
-    await runMigrations();
     const body = statusSchema.parse(await request.json());
     const result = await updateArtistsStatus(body.ids, body.status);
 

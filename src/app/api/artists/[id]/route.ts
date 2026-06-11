@@ -4,7 +4,6 @@ import { broadcastArtistsChanged } from "@/lib/artists-events";
 import { normalizeArtistId } from "@/lib/artist-id";
 import { softDeleteArtist, updateArtist } from "@/lib/artists";
 import { requireAccess } from "@/lib/access/require-access";
-import { runMigrations } from "@/lib/db/migrate";
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).optional(),
@@ -26,7 +25,6 @@ export async function PATCH(
   try {
     const access = await requireAccess();
     if (!access.ok) return access.response;
-    await runMigrations();
     const { id: rawId } = await params;
     const id = normalizeArtistId(rawId);
     const body = patchSchema.parse(await request.json());
@@ -54,7 +52,6 @@ export async function DELETE(
   try {
     const access = await requireAccess();
     if (!access.ok) return access.response;
-    await runMigrations();
     const { id: rawId } = await params;
     const artist = await softDeleteArtist(normalizeArtistId(rawId));
     if (!artist) {

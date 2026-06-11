@@ -8,7 +8,6 @@ import { ArtistsTable } from "./ArtistsTable";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { CommandMenu } from "./CommandMenu";
 import { FoldersPanel } from "./FoldersPanel";
-import { OdooAlertBanner } from "./OdooAlertBanner";
 import { QuickEditPanel } from "./QuickEditPanel";
 import { StatusFilterPills } from "./StatusFilterPills";
 import { TrashPanel } from "./TrashPanel";
@@ -26,7 +25,6 @@ import { useArtistsSync } from "@/hooks/useArtistsSync";
 import { useFolders } from "@/hooks/useFolders";
 import { InstallPrompt } from "@/components/m3/InstallPrompt";
 import { ServiceWorkerRegister } from "@/components/m3/ServiceWorkerRegister";
-import { countOdooPending } from "@/lib/artist-stats";
 import { formatHebrewDateTime } from "@/lib/format";
 import {
   BOARD_COLUMN_META,
@@ -55,7 +53,6 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     position: { x: number; y: number };
   } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [odooBulkBusy, setOdooBulkBusy] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
   const statusFilter = useUiStore((s) => s.statusFilter);
@@ -121,8 +118,6 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     return [...set].sort((a, b) => a.localeCompare(b, "he"));
   }, [allArtists]);
 
-  const odooPendingCount = useMemo(() => countOdooPending(allArtists), [allArtists]);
-
   const hideBoard = statusFilter === "unsigned";
 
   const boardArtistsCount = useMemo(
@@ -151,16 +146,6 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
   const setSelection = useCallback((ids: string[]) => {
     setSelectedIds(new Set(ids));
   }, []);
-
-  const selectAllFiltered = useCallback(() => {
-    if (artists.length === 0) return;
-    if (artists.length > 500) {
-      const ok = window.confirm(`לבחור את כל ${artists.length} האומנים המוצגים?`);
-      if (!ok) return;
-    }
-    setSelectedIds(new Set(artists.map((a) => a.id)));
-    showToast(`נבחרו ${artists.length} אומנים`);
-  }, [artists]);
 
   const handleBulkStatusChange = useCallback(
     async (ids: string[], status: ArtistStatus) => {
@@ -224,22 +209,6 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     showToast(`נוצר: ${artist.name}`);
   };
 
-  const handleApproveAllOdoo = async () => {
-    const pending = allArtists.filter((a) => a.status === "signed" && !a.isOdooApproved);
-    if (pending.length === 0) return;
-    const ok = window.confirm(`לאשר Odoo עבור ${pending.length} אומנים חתומים?`);
-    if (!ok) return;
-    setOdooBulkBusy(true);
-    try {
-      await bulkUpdate({ ids: pending.map((a) => a.id), isOdooApproved: true });
-      showToast(`אושרו ${pending.length} אומנים ב-Odoo`);
-    } catch {
-      showToast("אישור Odoo נכשל");
-    } finally {
-      setOdooBulkBusy(false);
-    }
-  };
-
   const handleBulkOdoo = useCallback(
     async (approved: boolean) => {
       try {
@@ -278,7 +247,15 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
     try {
       const { status: newStatus, ...rest } = patch;
       if (newStatus !== undefined && newStatus !== detailArtist.status) {
-        await updateStatus({ ids: [detailArtist.id], status: newStatus });
+        if (newStatus === "signed") {
+          await bulkUpdate({
+            ids: [detailArtist.id],
+            status: newStatus,
+            isOdooApproved: false,
+          });
+        } else {
+          await updateStatus({ ids: [detailArtist.id], status: newStatus });
+        }
       }
       if (Object.keys(rest).length > 0) {
         await updateArtist({ id: detailArtist.id, patch: rest });
@@ -388,14 +365,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
           onOpenCommandMenu={openCommandMenu}
           totalCount={artists.length}
           selectedCount={selectedIds.size}
-          onSelectAll={selectAllFiltered}
           onClearSelection={() => setSelectedIds(new Set())}
-        />
-
-        <OdooAlertBanner
-          count={odooPendingCount}
-          onApproveAll={handleApproveAllOdoo}
-          busy={odooBulkBusy}
         />
 
         {!isLoading && !isError && boardArtistsCount === 0 && vaultArtists.length > 0 && !vaultOpen && (
@@ -404,11 +374,15 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
           </div>
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 md:gap-4 md:p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <StatusFilterPills stats={stats} />
-            <div className="flex flex-wrap items-center gap-2">
-              <ViewModeSwitcher />
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2 lg:gap-4 lg:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className={viewMode === "kanban" ? "hidden lg:block" : ""}>
+              <StatusFilterPills stats={stats} />
+            </div>
+            <div className="ms-auto flex flex-wrap items-center gap-2">
+              <div className="hidden lg:block">
+                <ViewModeSwitcher />
+              </div>
               <WorkspaceActionsMenu
                 onExport={handleExport}
                 onImportClick={() => importRef.current?.click()}
@@ -572,11 +546,7 @@ export function ArtistWorkspace({ operatorName, offline, degraded }: ArtistWorks
       <CommandMenu
         artists={allArtists}
         onStatusChange={(id, status) => {
-          void updateStatus({ ids: [id], status })
-            .then(() => showToast(`סטטוס עודכן ל-${STATUS_META[status].label}`))
-            .catch((err) =>
-              showToast(err instanceof Error ? err.message : "עדכון סטטוס נכשל"),
-            );
+          void handleBulkStatusChange([id], status);
         }}
         onOdooChange={(id, approved) => {
           void updateArtist({ id, patch: { isOdooApproved: approved } });

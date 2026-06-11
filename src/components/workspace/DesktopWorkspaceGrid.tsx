@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
+import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { Fragment, useCallback, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   artistMatchesColumn,
@@ -17,6 +9,7 @@ import {
   type BoardColumnId,
 } from "@/lib/board-columns";
 import { boardCollisionDetection, resolveBoardDropColumn } from "@/lib/kanban-dnd";
+import { useBoardSensors } from "@/lib/useBoardSensors";
 import { ColumnResizeHandle } from "./kanban/ColumnResizeHandle";
 import { KanbanColumn } from "./kanban/KanbanColumn";
 import { BoardArtistCard } from "./kanban/BoardArtistCard";
@@ -64,9 +57,7 @@ export function DesktopWorkspaceGrid({
   const resizeAdjacentColumns = useUiStore((s) => s.resizeAdjacentColumns);
   const resizeVaultWidth = useUiStore((s) => s.resizeVaultWidth);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useBoardSensors();
 
   const boardArtists = artists.filter(
     (a) => a.status === "in_process" || a.status === "signed",

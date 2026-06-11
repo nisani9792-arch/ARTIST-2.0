@@ -2,8 +2,9 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import { shouldSkipRemoteSync } from "@/lib/mutation-sync";
 
-const DEBOUNCE_MS = 4000;
+const DEBOUNCE_MS = 800;
 
 export function useArtistsSync() {
   const queryClient = useQueryClient();
@@ -18,8 +19,10 @@ export function useArtistsSync() {
     let closed = false;
 
     const scheduleRefetch = () => {
+      if (shouldSkipRemoteSync()) return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
+        if (shouldSkipRemoteSync()) return;
         void queryClient.invalidateQueries({ queryKey: ["artists"] });
       }, DEBOUNCE_MS);
     };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useUiStore } from "@/stores";
 
 type WorkspaceActionsMenuProps = {
   onExport: () => void;
@@ -15,6 +16,8 @@ export function WorkspaceActionsMenu({
 }: WorkspaceActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const viewMode = useUiStore((s) => s.viewMode);
+  const setViewMode = useUiStore((s) => s.setViewMode);
 
   useEffect(() => {
     if (!open) return;
@@ -36,7 +39,17 @@ export function WorkspaceActionsMenu({
         עוד ⋯
       </button>
       {open && (
-        <div className="absolute end-0 top-full z-50 mt-1 min-w-[9rem] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+        <div className="absolute end-0 top-full z-50 mt-1 min-w-[10rem] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+          <button
+            type="button"
+            className="block w-full px-3 py-2 text-start text-xs font-semibold text-slate-700 hover:bg-slate-50 lg:hidden"
+            onClick={() => {
+              setViewMode(viewMode === "kanban" ? "list" : "kanban");
+              setOpen(false);
+            }}
+          >
+            {viewMode === "kanban" ? "תצוגת רשימה" : "תצוגת לוח"}
+          </button>
           <button
             type="button"
             className="block w-full px-3 py-2 text-start text-xs font-semibold text-slate-700 hover:bg-slate-50"
