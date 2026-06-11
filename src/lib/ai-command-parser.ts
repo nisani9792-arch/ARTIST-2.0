@@ -7,18 +7,26 @@ export type ParsedNameEntry = {
 };
 
 const INSTRUCTION_LINE_RE =
-  /^(?:סמן|שנה|העבר|צור|הוסף|להוסיף|הוספת|תעביר|העברי|שים|הכנס|אשר|בטל|רשימה|להלן|הבאים|כל\s|אומנים|מטפל|גורם|odoo|חתום|חתומים|לא\s*חתום|בעבודה)/i;
+  /^(?:סמן|שנה|העבר|צור|הוסף|להוסיף|הוספת|להכניס|תעביר|העברי|שים|הכנס|אשר|בטל|רשימה|להלן|הבאים|כל\s|אומנים|מטפל|גורם|odoo|חתום|חתומים|לא\s*חתום|בעבודה|ממתין)/i;
 
 const INSTRUCTION_RE =
   /^(סמן|שנה|העבר|צור|הוסף|להוסיף|אשר|בטל|רשימה|להלן|הבאים|כל|אומנים|מטפל|גורם|odoo|חתום|חתומים|לא חתום|בעבודה)/i;
 
 const NUMBERED_LINE_RE = /^\d+[\.\)]\s*.+/;
 
+/** חתומים uses medial mem (מ); חתום uses final mem (ם) — both must match. */
+const SIGNED_STATUS_RE = /חתומים|כחתום|חתום/i;
+const UNSIGNED_STATUS_RE = /לא\s*חתומים|לא\s*חתום/i;
+
 function parseStatus(text: string): ArtistStatus | undefined {
-  if (/לא\s*חתום/i.test(text)) return "unsigned";
+  if (UNSIGNED_STATUS_RE.test(text)) return "unsigned";
   if (/בעבודה|בתהליך/i.test(text)) return "in_process";
-  if (/חתום/i.test(text)) return "signed";
+  if (SIGNED_STATUS_RE.test(text)) return "signed";
   return undefined;
+}
+
+function isOdooPendingPhrase(text: string): boolean {
+  return /ממתין\s*(לאישור\s*)?(ב)?אודו/i.test(text);
 }
 
 function cleanName(raw: string): string {
@@ -35,7 +43,9 @@ function isInstructionLine(line: string): boolean {
   if (!t) return true;
   if (INSTRUCTION_LINE_RE.test(t)) return true;
   if (/^(כחתום|כלא חתום|לבעבודה|סמן\s+כ)/i.test(t)) return true;
-  if (/:\s*$/.test(t) && /(סמן|העבר|שנה|רשימה)/i.test(t)) return true;
+  if (/:\s*$/.test(t) && /(סמן|העבר|שנה|רשימה|הכנס|להכניס)/i.test(t)) return true;
+  if (/(להכניס|הכנס).*(רשימה|חתומים?|ממתין)/i.test(t)) return true;
+  if (isOdooPendingPhrase(t) && /(רשימה|חתומים?|הכנס|להכניס)/i.test(t)) return true;
   return false;
 }
 
@@ -292,12 +302,14 @@ export function parseLocalHebrewCommand(command: string): AiCommand | null {
   const status = parseStatus(actionText);
   const odooApprove = /אשר\s*odoo/i.test(actionText);
   const odooRevoke = /בטל\s*odoo/i.test(actionText);
+  const odooPending = isOdooPendingPhrase(actionText);
 
   if (entries.length > 0) {
-    const resolvedStatus: ArtistStatus = status ?? "in_process";
+    const resolvedStatus: ArtistStatus =
+      status ?? (odooPending ? "signed" : "in_process");
     const isOdooApproved = odooApprove
       ? true
-      : odooRevoke
+      : odooRevoke || odooPending
         ? false
         : applySignedOdooDefault(resolvedStatus, undefined);
 

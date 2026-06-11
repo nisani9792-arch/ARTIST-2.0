@@ -128,4 +128,20 @@ describe("parseLocalHebrewCommand", () => {
   it("describes command preview", () => {
     expect(describeCommandPreview("סמן כחתום\n1. אבי\n2. דני")).toMatch(/2 שמות/);
   });
+
+  it("parses odoo-pending signed list command", () => {
+    const cmd = `להכניס ברשימה חתומים ממתין לאישור באודו
+1. משה לוק
+2. מוטי וייס - לקראת סיום
+3. דוד קיי`;
+    const result = parseLocalHebrewCommand(cmd);
+    expect(result?.action).toBe("upsert_by_names");
+    if (result?.action === "upsert_by_names") {
+      expect(result.entries).toHaveLength(3);
+      expect(result.entries[0].name).toBe("משה לוק");
+      expect(result.entries[1]).toEqual({ name: "מוטי וייס", note: "לקראת סיום" });
+      expect(result.status).toBe("signed");
+      expect(result.isOdooApproved).toBe(false);
+    }
+  });
 });

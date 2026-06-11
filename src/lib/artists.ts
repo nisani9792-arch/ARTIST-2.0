@@ -15,6 +15,11 @@ import {
 
 const activeArtists = () => isNull(artists.deletedAt);
 
+/** Neon legacy schema requires NOT NULL on text fields — never write null. */
+function textOrEmpty(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+
 export type ArtistsScope = "board" | "vault" | "all";
 
 export async function listHandlers(): Promise<string[]> {
@@ -94,6 +99,8 @@ export type CreateArtistInput = {
   handlerName?: string;
   isOdooApproved?: boolean;
   notes?: string;
+  email?: string;
+  tag?: string;
 };
 
 export async function createArtist(input: CreateArtistInput | string): Promise<Artist> {
@@ -109,7 +116,9 @@ export async function createArtist(input: CreateArtistInput | string): Promise<A
       owner: data.handlerName?.trim() || DEFAULT_HANDLER,
       isOdooApproved: data.isOdooApproved ?? false,
       songCount: 0,
-      notes: data.notes?.trim() || null,
+      notes: textOrEmpty(data.notes),
+      email: textOrEmpty(data.email),
+      tag: textOrEmpty(data.tag),
       updatedAt: sql`NOW()`,
     })
     .returning();
@@ -211,7 +220,7 @@ export async function upsertArtistsByNames(input: {
         status: input.status ?? "in_process",
         handlerName: input.handlerName,
         isOdooApproved: resolvedOdoo,
-        notes: entry.note,
+        notes: textOrEmpty(entry.note),
       });
       created += 1;
     }
@@ -247,9 +256,9 @@ export async function updateArtist(id: string, patch: ArtistPatch): Promise<Arti
   if (patch.isOdooApproved !== undefined) values.isOdooApproved = patch.isOdooApproved;
   if (patch.songCount !== undefined) values.songCount = Math.max(0, Math.floor(patch.songCount));
   if (patch.handlerName !== undefined) values.owner = patch.handlerName.trim();
-  if (patch.email !== undefined) values.email = patch.email.trim();
-  if (patch.notes !== undefined) values.notes = patch.notes;
-  if (patch.tag !== undefined) values.tag = patch.tag.trim();
+  if (patch.email !== undefined) values.email = textOrEmpty(patch.email);
+  if (patch.notes !== undefined) values.notes = textOrEmpty(patch.notes);
+  if (patch.tag !== undefined) values.tag = textOrEmpty(patch.tag);
   if (patch.folderId !== undefined) values.folderId = patch.folderId;
   if (patch.deletedAt !== undefined) values.deletedAt = patch.deletedAt;
 
@@ -356,8 +365,9 @@ export async function importArtistsFromRows(
       nameHe: name,
       status: normalizeStatus(row.status ?? "unsigned"),
       owner: row.handler?.trim() || DEFAULT_HANDLER,
-      email: row.email?.trim() || null,
-      tag: row.tag?.trim() || null,
+      email: textOrEmpty(row.email),
+      tag: textOrEmpty(row.tag),
+      notes: "",
       isOdooApproved: false,
       songCount: 0,
       updatedAt: new Date().toISOString(),

@@ -50,6 +50,15 @@ export async function runMigrations(): Promise<void> {
     UPDATE artists SET status = 'in_process', updated_at = NOW()
     WHERE status = 'stuck'
   `);
+  await db.execute(sql`
+    UPDATE artists SET notes = '' WHERE notes IS NULL
+  `);
+  await db.execute(sql`
+    UPDATE artists SET email = '' WHERE email IS NULL
+  `);
+  await db.execute(sql`
+    UPDATE artists SET tag = '' WHERE tag IS NULL
+  `);
 
   migrated = true;
   console.log("db:migrate — complete");
